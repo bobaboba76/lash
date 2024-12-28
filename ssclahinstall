@@ -1,0 +1,26 @@
+#!/bin/sh
+
+# Скрипт для установки Clash на OpenWRT
+
+# 1. Обновление пакетов и установка необходимых модулей
+echo "Обновление списка пакетов и установка kmod-nft-tproxy..."
+opkg update && opkg install kmod-nft-tproxy
+
+# 2. Установка LuCI интерфейса для Clash
+echo "Установка luci-clash..."
+LUCI_CLASH_URL="https://github.com/ваш-репозиторий/luci-app-ssclash_1.8.1.ipk"  
+wget "$LUCI_CLASH_URL" -O /tmp/luci-app-ssclash_1.8.1.ipk
+opkg install /tmp/luci-app-ssclash_1.8.1.ipk
+rm -f /tmp/luci-app-ssclash_1.8.1.ipk
+
+# 3. Загрузка и установка бинарного файла Clash
+echo "Загрузка Clash и установка в /opt/clash/bin..."
+mkdir -p /opt/clash/bin/
+CLASH_BIN_URL="https://github.com/ваш-репозиторий/путь-к-clash.gz"  
+wget "$CLASH_BIN_URL" -O /opt/clash/bin/clash.gz
+gunzip /opt/clash/bin/clash.gz
+chmod +x /opt/clash/bin/clash
+
+# 4. Перезагрузка системы
+echo "Перезагрузка устройства..."
+reboot
