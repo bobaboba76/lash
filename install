@@ -47,7 +47,7 @@ if [ ! -f "/tmp/subconverter/subconverter" ]; then
     print_error "Файл subconverter не найден в папке subconverter внутри архива"
 fi
 print_msg "Установка subconverter в /usr/bin..."
-mv /tmp/subconverter/subconverter /usr/bin/ || print_error "Не удалось переместить subconverter"
+mv /tmp/subconverter/subconverter /usr/bin/subconverter || print_error "Не удалось переместить subconverter"
 chmod +x /usr/bin/subconverter
 print_msg "Проверка версии subconverter..."
 /usr/bin/subconverter -v || print_error "subconverter не запускается"
