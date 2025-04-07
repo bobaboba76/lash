@@ -46,17 +46,17 @@ tar -xzf /tmp/subconverter_aarch64.tar.gz -C /tmp || print_error "Не удал�
 if [ ! -f "/tmp/subconverter/subconverter" ]; then
     print_error "Файл subconverter не найден в папке subconverter внутри архива"
 fi
-print_msg "Установка subconverter в /usr/bin..."
-mv /tmp/subconverter/subconverter /usr/bin/subconverter || print_error "Не удалось переместить subconverter"
-chmod +x /usr/bin/subconverter
+print_msg "Установка subconverter в /root..."
+mv /tmp/subconverter/subconverter /root/subconverter || print_error "Не удалось переместить subconverter"
+chmod +x /root/subconverter
 print_msg "Проверка версии subconverter..."
-/usr/bin/subconverter -v || print_error "subconverter не запускается"
+/root/subconverter -v || print_error "subconverter не запускается"
 print_msg "Настройка автозапуска subconverter..."
 cat > /etc/init.d/subconverter << 'EOF'
 #!/bin/sh /etc/rc.common
 START=90
 start() {
-    /usr/bin/subconverter &
+    /root/subconverter &
 }
 stop() {
     killall subconverter
