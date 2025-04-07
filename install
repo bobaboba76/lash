@@ -43,11 +43,11 @@ print_msg "Скачивание subconverter..."
 wget -O /tmp/subconverter_aarch64.tar.gz https://github.com/tindy2013/subconverter/releases/download/v0.9.0/subconverter_aarch64.tar.gz || print_error "Не удалось скачать subconverter"
 print_msg "Распаковка subconverter..."
 tar -xzf /tmp/subconverter_aarch64.tar.gz -C /tmp || print_error "Не удалось распаковать subconverter"
-if [ ! -f "/tmp/subconverter" ]; then
-    print_error "Файл subconverter не найден в архиве"
+if [ ! -f "/tmp/subconverter/subconverter" ]; then
+    print_error "Файл subconverter не найден в папке subconverter внутри архива"
 fi
 print_msg "Установка subconverter в /usr/bin..."
-mv /tmp/subconverter /usr/bin/ || print_error "Не удалось переместить subconverter"
+mv /tmp/subconverter/subconverter /usr/bin/ || print_error "Не удалось переместить subconverter"
 chmod +x /usr/bin/subconverter
 print_msg "Проверка версии subconverter..."
 /usr/bin/subconverter -v || print_error "subconverter не запускается"
@@ -72,7 +72,8 @@ if netstat -tuln | grep -q 25500; then
 else
     print_error "subconverter не запустился"
 fi
-rm -f /tmp/subconverter_aarch64.tar.gz
+rm -rf /tmp/subconverter /tmp/subconverter_aarch64.tar.gz
+print_msg "Очистка временных файлов завершена"
 
 # Установка Clash (в самом конце)
 print_step "Установка Clash"
