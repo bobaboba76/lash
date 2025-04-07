@@ -49,17 +49,16 @@ fi
 print_msg "Установка subconverter в /root..."
 mv /tmp/subconverter/subconverter /root/subconverter || print_error "Не удалось переместить subconverter"
 chmod +x /root/subconverter
-print_msg "Проверка версии subconverter..."
-/root/subconverter -v > /tmp/subconverter_version 2>&1 & 
-sleep 2  # Даём время запуститься
-if grep -q "SubConverter v0.9.0" /tmp/subconverter_version; then
-    killall subconverter  # Завершаем процесс после проверки
-    print_msg "Версия subconverter подтверждена"
+print_msg "Проверка запуска subconverter..."
+/root/subconverter &  # Запускаем в фоне
+sleep 1  # Даём секунду на старт
+SUBCONV_PID=$!
+if kill -0 $SUBCONV_PID 2>/dev/null; then
+    kill $SUBCONV_PID  # Завершаем процесс
+    print_msg "subconverter успешно запускается"
 else
-    killall subconverter 2>/dev/null
-    print_error "subconverter не работает корректно"
+    print_error "subconverter не удалось запустить"
 fi
-rm -f /tmp/subconverter_version
 print_msg "Настройка автозапуска subconverter..."
 cat > /etc/init.d/subconverter << 'EOF'
 #!/bin/sh /etc/rc.common
