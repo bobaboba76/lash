@@ -1,24 +1,94 @@
 #!/bin/sh
 
-# Устанавливаем kmod-nft-tproxy
-opkg update && opkg install kmod-nft-tproxy
+# Цветной вывод для красоты
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m' # No Color
 
-# Устанавливаем luci-clash
-echo "Установка luci-clash..."
-wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk
-opkg install /tmp/luci-app-clash.ipk
+# Функция для вывода сообщений
+print_msg() {
+    echo -e "${GREEN}[*] $1${NC}"
+}
 
-# Останавливаем Clash перед установкой
-echo "Остановка Clash..."
-/etc/init.d/clash stop
+print_error() {
+    echo -e "${RED}[!] Ошибка: $1${NC}"
+    exit 1
+}
 
-# Загружаем и устанавливаем Clash
-echo "Загрузка Clash и установка в /opt/clash/bin..."
-mkdir -p /opt/clash/bin
-wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz
-gunzip /opt/clash/bin/clash.gz
+print_step() {
+    echo -e "${YELLOW}=== $1 ===${NC}"
+}
+
+# Обновление пакетов
+print_step "Обновление списка пакетов"
+opkg update || print_error "Не удалось обновить список пакетов"
+
+# Установка kmod-nft-tproxy
+print_step "Установка kmod-nft-tproxy"
+opkg install kmod-nft-tproxy || print_error "Не удалось установить kmod-nft-tproxy"
+
+# Установка luci-app-clash
+print_step "Установка luci-app-clash"
+print_msg "Скачивание luci-app-clash..."
+wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Не удалось скачать luci-app-clash.ipk"
+print_msg "Установка luci-app-clash..."
+opkg install /tmp/luci-app-clash.ipk || print_error "Не удалось установить luci-app-clash"
+rm -f /tmp/luci-app-clash.ipk
+print_msg "luci-app-clash установлен"
+
+# Установка subconverter
+print_step "Установка subconverter v0.9.0"
+print_msg "Скачивание subconverter..."
+wget -O /tmp/subconverter_aarch64.tar.gz https://github.com/tindy2013/subconverter/releases/download/v0.9.0/subconverter_aarch64.tar.gz || print_error "Не удалось скачать subconverter"
+print_msg "Распаковка subconverter..."
+tar -xzf /tmp/subconverter_aarch64.tar.gz -C /tmp || print_error "Не удалось распаковать subconverter"
+if [ ! -f "/tmp/subconverter" ]; then
+    print_error "Файл subconverter не найден в архиве"
+fi
+print_msg "Установка subconverter в /usr/bin..."
+mv /tmp/subconverter /usr/bin/ || print_error "Не удалось переместить subconverter"
+chmod +x /usr/bin/subconverter
+print_msg "Проверка версии subconverter..."
+/usr/bin/subconverter -v || print_error "subconverter не запускается"
+print_msg "Настройка автозапуска subconverter..."
+cat > /etc/init.d/subconverter << 'EOF'
+#!/bin/sh /etc/rc.common
+START=90
+start() {
+    /usr/bin/subconverter &
+}
+stop() {
+    killall subconverter
+}
+EOF
+chmod +x /etc/init.d/subconverter
+/etc/init.d/subconverter enable
+print_msg "Запуск subconverter..."
+/etc/init.d/subconverter start
+sleep 2
+if netstat -tuln | grep -q 25500; then
+    print_msg "subconverter успешно запущен на порту 25500"
+else
+    print_error "subconverter не запустился"
+fi
+rm -f /tmp/subconverter_aarch64.tar.gz
+
+# Установка Clash (в самом конце)
+print_step "Установка Clash"
+print_msg "Остановка Clash перед установкой..."
+/etc/init.d/clash stop 2>/dev/null || print_msg "Clash ещё не был запущен"
+print_msg "Создание директории /opt/clash/bin..."
+mkdir -p /opt/clash/bin || print_error "Не удалось создать директорию /opt/clash/bin"
+print_msg "Скачивание Clash..."
+wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz || print_error "Не удалось скачать clash.gz"
+print_msg "Распаковка Clash..."
+gunzip /opt/clash/bin/clash.gz || print_error "Не удалось распаковать clash.gz"
 chmod +x /opt/clash/bin/clash
+print_msg "Clash установлен в /opt/clash/bin"
 
-# Перезагрузка устройства
-echo "Перезагрузка устройства..."
+# Перезагрузка
+print_step "Перезагрузка устройства"
+print_msg "Все компоненты установлены. Перезагружаем..."
+sleep 2
 reboot
