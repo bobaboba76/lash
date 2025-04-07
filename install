@@ -40,7 +40,7 @@ print_msg "luci-app-clash установлен"
 # Установка subconverter
 print_step "Установка subconverter v0.9.0"
 print_msg "Скачивание subconverter..."
-wget -O /tmp/subconverter_aarch64.tar.gz https://github.com/tindy2013/subconverter/releases/download/v0.9.0/subconverter_aarch64.tar.gz || print_error "Не удалось скачать subconverter"
+wget -O /tmp/subconverter_aarch64.tar.gz https://raw.githubusercontent.com/bobaboba76/lash/main/subconverter_aarch64.tar.gz || print_error "Не удалось скачать subconverter"
 print_msg "Распаковка subconverter..."
 tar -xzf /tmp/subconverter_aarch64.tar.gz -C /tmp || print_error "Не удалось распаковать subconverter"
 if [ ! -f "/tmp/subconverter/subconverter" ]; then
