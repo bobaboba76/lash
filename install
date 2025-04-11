@@ -28,15 +28,6 @@ opkg update || print_error "Не удалось обновить список п
 print_step "Установка kmod-nft-tproxy"
 opkg install kmod-nft-tproxy || print_error "Не удалось установить kmod-nft-tproxy"
 
-# Установка luci-app-clash
-print_step "Установка luci-app-clash"
-print_msg "Скачивание luci-app-clash..."
-wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Не удалось скачать luci-app-clash.ipk"
-print_msg "Установка luci-app-clash..."
-opkg install /tmp/luci-app-clash.ipk || print_error "Не удалось установить luci-app-clash"
-rm -f /tmp/luci-app-clash.ipk
-print_msg "luci-app-clash установлен"
-
 # Установка subconverter
 print_step "Установка subconverter v0.9.0"
 print_msg "Скачивание subconverter..."
@@ -82,6 +73,15 @@ else
 fi
 rm -rf /tmp/subconverter /tmp/subconverter_aarch64.tar.gz
 print_msg "Очистка временных файлов завершена"
+
+# Установка luci-app-clash
+print_step "Установка luci-app-clash"
+print_msg "Скачивание luci-app-clash..."
+wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Не удалось скачать luci-app-clash.ipk"
+print_msg "Установка luci-app-clash..."
+opkg install /tmp/luci-app-clash.ipk || print_error "Не удалось установить luci-app-clash"
+rm -f /tmp/luci-app-clash.ipk
+print_msg "luci-app-clash установлен"
 
 # Установка Clash (в самом конце)
 print_step "Установка Clash"
