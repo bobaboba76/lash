@@ -28,52 +28,6 @@ opkg update || print_error "Не удалось обновить список п
 print_step "Установка kmod-nft-tproxy"
 opkg install kmod-nft-tproxy || print_error "Не удалось установить kmod-nft-tproxy"
 
-# Установка subconverter
-print_step "Установка subconverter v0.9.0"
-print_msg "Скачивание subconverter..."
-wget -O /tmp/subconverter_aarch64.tar.gz https://raw.githubusercontent.com/bobaboba76/lash/main/subconverter_aarch64.tar.gz || print_error "Не удалось скачать subconverter"
-print_msg "Распаковка subconverter..."
-tar -xzf /tmp/subconverter_aarch64.tar.gz -C /tmp || print_error "Не удалось распаковать subconverter"
-if [ ! -f "/tmp/subconverter/subconverter" ]; then
-    print_error "Файл subconverter не найден в папке subconverter внутри архива"
-fi
-print_msg "Установка subconverter в /root..."
-mv /tmp/subconverter/subconverter /root/subconverter || print_error "Не удалось переместить subconverter"
-chmod +x /root/subconverter
-print_msg "Проверка запуска subconverter..."
-/root/subconverter &  # Запускаем в фоне
-sleep 1  # Даём секунду на старт
-SUBCONV_PID=$!
-if kill -0 $SUBCONV_PID 2>/dev/null; then
-    kill $SUBCONV_PID  # Завершаем процесс
-    print_msg "subconverter успешно запускается"
-else
-    print_error "subconverter не удалось запустить"
-fi
-print_msg "Настройка автозапуска subconverter..."
-cat > /etc/init.d/subconverter << 'EOF'
-#!/bin/sh /etc/rc.common
-START=90
-start() {
-    /root/subconverter &
-}
-stop() {
-    killall subconverter
-}
-EOF
-chmod +x /etc/init.d/subconverter
-/etc/init.d/subconverter enable
-print_msg "Запуск subconverter..."
-/etc/init.d/subconverter start
-sleep 2
-if netstat -tuln | grep -q 25500; then
-    print_msg "subconverter успешно запущен на порту 25500"
-else
-    print_error "subconverter не запустился"
-fi
-rm -rf /tmp/subconverter /tmp/subconverter_aarch64.tar.gz
-print_msg "Очистка временных файлов завершена"
-
 # Установка luci-app-clash
 print_step "Установка luci-app-clash"
 print_msg "Скачивание luci-app-clash..."
