@@ -1,57 +1,51 @@
 #!/bin/sh
 
-# Цветной вывод для красоты
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-RED='\033[0;31m'
-NC='\033[0m' # No Color
-
-# Функция для вывода сообщений
+# Functions for printing messages
 print_msg() {
-    echo -e "${GREEN}[*] $1${NC}"
+    echo "[*] $1"
 }
 
 print_error() {
-    echo -e "${RED}[!] Ошибка: $1${NC}"
+    echo "[!] Error: $1"
     exit 1
 }
 
 print_step() {
-    echo -e "${YELLOW}=== $1 ===${NC}"
+    echo "=== $1 ==="
 }
 
-# Обновление пакетов только из официальных источников
-print_step "Обновление списка пакетов"
-opkg update || print_error "Не удалось обновить список пакетов"
+# Update packages only from official sources
+print_step "Updating package list"
+opkg update || print_error "Failed to update package list"
 
-# Установка kmod-nft-tproxy
-print_step "Установка kmod-nft-tproxy"
-opkg install kmod-nft-tproxy || print_error "Не удалось установить kmod-nft-tproxy"
+# Install kmod-nft-tproxy
+print_step "Installing kmod-nft-tproxy"
+opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
-# Установка luci-app-clash
-print_step "Установка luci-app-clash"
-print_msg "Скачивание luci-app-clash..."
-wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Не удалось скачать luci-app-clash.ipk"
-print_msg "Установка luci-app-clash..."
-opkg install /tmp/luci-app-clash.ipk || print_error "Не удалось установить luci-app-clash"
+# Install luci-app-clash
+print_step "Installing luci-app-clash"
+print_msg "Downloading luci-app-clash..."
+wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Failed to download luci-app-clash.ipk"
+print_msg "Installing luci-app-clash..."
+opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 rm -f /tmp/luci-app-clash.ipk
-print_msg "luci-app-clash установлен"
+print_msg "luci-app-clash installed"
 
-# Установка Clash (в самом конце)
-print_step "Установка Clash"
-print_msg "Остановка Clash перед установкой..."
-/etc/init.d/clash stop 2>/dev/null || print_msg "Clash ещё не был запущен"
-print_msg "Создание директории /opt/clash/bin..."
-mkdir -p /opt/clash/bin || print_error "Не удалось создать директорию /opt/clash/bin"
-print_msg "Скачивание Clash..."
-wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz || print_error "Не удалось скачать clash.gz"
-print_msg "Распаковка Clash..."
-gunzip /opt/clash/bin/clash.gz || print_error "Не удалось распаковать clash.gz"
+# Install Clash (at the very end)
+print_step "Installing Clash"
+print_msg "Stopping Clash before installation..."
+/etc/init.d/clash stop 2>/dev/null || print_msg "Clash was not running"
+print_msg "Creating directory /opt/clash/bin..."
+mkdir -p /opt/clash/bin || print_error "Failed to create directory /opt/clash/bin"
+print_msg "Downloading Clash..."
+wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz || print_error "Failed to download clash.gz"
+print_msg "Extracting Clash..."
+gunzip /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
 chmod +x /opt/clash/bin/clash
-print_msg "Clash установлен в /opt/clash/bin"
+print_msg "Clash installed in /opt/clash/bin"
 
-# Перезагрузка
-print_step "Перезагрузка устройства"
-print_msg "Все компоненты установлены. Перезагружаем..."
+# Reboot
+print_step "Rebooting device"
+print_msg "All components installed. Rebooting..."
 sleep 2
 reboot
