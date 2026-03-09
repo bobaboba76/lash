@@ -35,46 +35,43 @@ fi
 print_msg "Selected mode: $MODE"
 
 # =========================
+# Update packages (обязательно в начале)
+# =========================
+print_step "Updating package list"
+opkg update || print_error "Failed to update package list"
+
+# =========================
 # Low RAM setup
 # =========================
-
 if [ "$MODE" = "1" ]; then
+    print_step "Installing ZRAM"
 
-print_step "Installing ZRAM"
+    opkg install kmod-zram zram-swap kmod-lib-zstd \
+    || print_error "Failed to install zram packages"
 
-opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install zram packages"
+    # Жёстко выставляем 128 МБ
+    ZRAM_SIZE=$((128 * 1024))  # KB
+    print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
+    uci set system.@system[0].zram_size="$ZRAM_SIZE"
+    uci commit system
 
-# Жёстко выставляем 128 МБ
-ZRAM_SIZE=$((128 * 1024))  # в KB
+    /etc/init.d/zram enable
+    /etc/init.d/zram start
 
-print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
-
-uci set system.@system[0].zram_size="$ZRAM_SIZE"
-uci commit system
-
-/etc/init.d/zram enable
-/etc/init.d/zram start
-
-print_msg "ZRAM enabled"
-
+    print_msg "ZRAM enabled"
 else
-
-print_msg "High RAM mode (ZRAM skipped)"
-
+    print_msg "High RAM mode (ZRAM skipped)"
 fi
 
 # =========================
 # Install kmod-nft-tproxy
 # =========================
-
 print_step "Installing kmod-nft-tproxy"
-
 opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
 # =========================
 # Install luci-app-clash
 # =========================
-
 print_step "Installing luci-app-clash"
 
 wget -O /tmp/luci-app-clash.ipk \
@@ -95,9 +92,8 @@ print_msg "Stopping auto-started Clash..."
 # -------------------------------------------------
 
 # =========================
-# Install Clash
+# Install Clash Core
 # =========================
-
 print_step "Installing Clash"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
@@ -116,7 +112,6 @@ print_msg "Clash installed"
 # =========================
 # Download Geo databases
 # =========================
-
 print_step "Installing Geo databases"
 
 wget -q -O /opt/clash/geosite.dat \
@@ -130,7 +125,6 @@ print_msg "Geo databases installed"
 # =========================
 # Setup cron
 # =========================
-
 print_step "Setting up Geo database auto-update"
 
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron_clash
@@ -149,7 +143,6 @@ print_msg "Cron job installed"
 # =========================
 # Reboot
 # =========================
-
 print_step "Rebooting device"
 
 sleep 2
