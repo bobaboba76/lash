@@ -35,14 +35,6 @@ fi
 print_msg "Selected mode: $MODE"
 
 # =========================
-# Update packages
-# =========================
-
-print_step "Updating package list"
-
-opkg update || print_error "Failed to update package list"
-
-# =========================
 # Low RAM setup
 # =========================
 
@@ -52,11 +44,10 @@ print_step "Installing ZRAM"
 
 opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install zram packages"
 
-RAM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-ZRAM_SIZE=$((RAM_TOTAL / 2))
+# Жёстко выставляем 128 МБ
+ZRAM_SIZE=$((128 * 1024))  # в KB
 
-print_msg "Detected RAM: $RAM_TOTAL KB"
-print_msg "Setting ZRAM size to: $ZRAM_SIZE KB"
+print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
 uci commit system
@@ -97,11 +88,11 @@ rm -f /tmp/luci-app-clash.ipk
 
 print_msg "luci-app-clash installed"
 
-# -------- FIX --------
+# -------- FIX: остановка автозапуска Clash --------
 print_msg "Stopping auto-started Clash..."
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
-# ---------------------
+# -------------------------------------------------
 
 # =========================
 # Install Clash
