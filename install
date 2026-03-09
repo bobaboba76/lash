@@ -17,7 +17,6 @@ print_step() {
 # Select installation mode
 # =========================
 print_step "Select installation mode"
-
 echo "1) Low RAM device (enable ZRAM swap)"
 echo "2) High RAM device (no ZRAM)"
 echo ""
@@ -28,7 +27,6 @@ if [ -e /dev/tty ]; then
     read MODE < /dev/tty
 fi
 [ -z "$MODE" ] && MODE=2
-
 print_msg "Selected mode: $MODE"
 
 # =========================
@@ -42,11 +40,9 @@ opkg update || print_error "Failed to update package list"
 # =========================
 if [ "$MODE" = "1" ]; then
     print_step "Installing ZRAM"
-
     opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
-    || print_error "Failed to install zram packages"
+        || print_error "Failed to install ZRAM packages"
 
-    # Fixed 128 MB
     ZRAM_SIZE=$((128 * 1024))  # KB
     print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
     uci set system.@system[0].zram_size="$ZRAM_SIZE"
@@ -54,7 +50,6 @@ if [ "$MODE" = "1" ]; then
 
     /etc/init.d/zram enable
     /etc/init.d/zram start
-
     print_msg "ZRAM enabled"
 else
     print_msg "High RAM mode (ZRAM skipped)"
@@ -73,11 +68,9 @@ print_step "Installing luci-app-clash"
 
 ENC_LUCI="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTY3L2xhc2gvbWFpbi9sdWNpLWFwcC1jbGFzaC5pcGs="
 wget -q -O /tmp/luci-app-clash.ipk $(echo "$ENC_LUCI" | openssl enc -d -base64) \
-|| print_error "Failed to download luci-app-clash"
+    || print_error "Failed to download luci-app-clash"
 
-opkg install /tmp/luci-app-clash.ipk \
-|| print_error "Failed to install luci-app-clash"
-
+opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 rm -f /tmp/luci-app-clash.ipk
 print_msg "luci-app-clash installed"
 
@@ -95,11 +88,9 @@ mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 ENC_CLASH="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTY3L2xhc2gvbWFpbi9jbGFzaC5nei"
 wget -q -O /opt/clash/bin/clash.gz $(echo "$ENC_CLASH" | openssl enc -d -base64) \
-|| print_error "Failed to download clash.gz"
+    || print_error "Failed to download clash.gz"
 
-gunzip -f /opt/clash/bin/clash.gz \
-|| print_error "Failed to extract clash.gz"
-
+gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
 chmod +x /opt/clash/bin/clash
 print_msg "Clash installed"
 
@@ -113,7 +104,6 @@ ENC_GEOIP="aHR0cHM6Ly9naXRodWIuY29tL01ldGFDdWJlWC9tZXRhLXJ1bGVzLWRhdC9yZWxlYXNlc
 
 wget -q -O /opt/clash/geosite.dat $(echo "$ENC_GEOSITE" | openssl enc -d -base64)
 wget -q -O /opt/clash/geoip.dat $(echo "$ENC_GEOIP" | openssl enc -d -base64)
-
 print_msg "Geo databases installed"
 
 # =========================
