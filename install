@@ -14,16 +14,55 @@ print_step() {
     echo "=== $1 ==="
 }
 
-# Update packages only from official sources
+print_step "Select installation mode"
+
+echo "1) Low RAM device (enable ZRAM swap)"
+echo "2) High RAM device (no ZRAM)"
+echo ""
+read -p "Enter option (1 or 2): " MODE
+
+# Update packages
 print_step "Updating package list"
 opkg update || print_error "Failed to update package list"
+
+# Low RAM option
+if [ "$MODE" = "1" ]; then
+
+print_step "Installing ZRAM for low RAM devices"
+
+opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install zram packages"
+
+RAM_TOTAL=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
+ZRAM_SIZE=$((RAM_TOTAL / 2))
+
+print_msg "Detected RAM: $RAM_TOTAL KB"
+print_msg "Setting ZRAM size to: $ZRAM_SIZE KB"
+
+uci set system.@system[0].zram_size="$ZRAM_SIZE"
+uci commit system
+
+/etc/init.d/zram enable
+/etc/init.d/zram start
+
+print_msg "ZRAM swap enabled"
+
+elif [ "$MODE" = "2" ]; then
+
+print_msg "High RAM mode selected (ZRAM skipped)"
+
+else
+print_error "Invalid option"
+fi
+
 
 # Install kmod-nft-tproxy
 print_step "Installing kmod-nft-tproxy"
 opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
+
 # Install luci-app-clash
 print_step "Installing luci-app-clash"
+
 print_msg "Downloading luci-app-clash..."
 wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Failed to download luci-app-clash.ipk"
 
@@ -31,7 +70,9 @@ print_msg "Installing luci-app-clash..."
 opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 
 rm -f /tmp/luci-app-clash.ipk
+
 print_msg "luci-app-clash installed"
+
 
 # Install Clash
 print_step "Installing Clash"
@@ -40,7 +81,7 @@ print_msg "Stopping Clash before installation..."
 /etc/init.d/clash stop 2>/dev/null || print_msg "Clash was not running"
 
 print_msg "Creating directory /opt/clash/bin..."
-mkdir -p /opt/clash/bin || print_error "Failed to create directory /opt/clash/bin"
+mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 print_msg "Downloading Clash..."
 wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz || print_error "Failed to download clash.gz"
@@ -49,20 +90,21 @@ print_msg "Extracting Clash..."
 gunzip /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
 
 chmod +x /opt/clash/bin/clash
-print_msg "Clash installed in /opt/clash/bin"
+
+print_msg "Clash installed"
+
 
 # Download Geo databases
 print_step "Installing Geo databases"
 
-print_msg "Downloading geosite.dat..."
 wget -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat || print_error "Failed to download geosite.dat"
 
-print_msg "Downloading geoip.dat..."
 wget -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat || print_error "Failed to download geoip.dat"
 
 print_msg "Geo databases installed"
 
-# Setup cron auto-update
+
+# Setup cron
 print_step "Setting up Geo database auto-update"
 
 crontab -l 2>/dev/null | grep -v "meta-rules-dat" > /tmp/cron_clash
@@ -73,10 +115,15 @@ echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/met
 crontab /tmp/cron_clash
 rm -f /tmp/cron_clash
 
-print_msg "Cron job installed (monthly update at 04:00)"
+/etc/init.d/cron enable
+/etc/init.d/cron restart
+
+print_msg "Cron job installed"
+
 
 # Reboot
 print_step "Rebooting device"
+
 print_msg "All components installed. Rebooting..."
 sleep 2
 reboot
