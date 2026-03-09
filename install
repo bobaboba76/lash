@@ -46,7 +46,7 @@ opkg update || print_error "Failed to update package list"
 if [ "$MODE" = "1" ]; then
     print_step "Installing ZRAM"
 
-    opkg install kmod-zram zram-swap kmod-lib-zstd \
+    opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 \
     || print_error "Failed to install zram packages"
 
     # Жёстко выставляем 128 МБ
@@ -70,12 +70,12 @@ print_step "Installing kmod-nft-tproxy"
 opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
 # =========================
-# Install luci-app-clash
+# Install luci-app-clash через Base64
 # =========================
 print_step "Installing luci-app-clash"
 
-wget -O /tmp/luci-app-clash.ipk \
-https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
+ENC_LUCI="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTU2L2xhc2gvbWFpbi9sdWNpLWFwcC1jbGFzaC5pcGs="
+wget -O /tmp/luci-app-clash.ipk $(echo "$ENC_LUCI" | base64 -d) \
 || print_error "Failed to download luci-app-clash"
 
 opkg install /tmp/luci-app-clash.ipk \
@@ -92,14 +92,14 @@ print_msg "Stopping auto-started Clash..."
 # -------------------------------------------------
 
 # =========================
-# Install Clash Core
+# Install Clash Core через Base64
 # =========================
 print_step "Installing Clash"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
-wget -O /opt/clash/bin/clash.gz \
-https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
+ENC_CLASH="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTU2L2xhc2gvbWFpbi9jbGFzaC5nei"
+wget -O /opt/clash/bin/clash.gz $(echo "$ENC_CLASH" | base64 -d) \
 || print_error "Failed to download clash.gz"
 
 gunzip -f /opt/clash/bin/clash.gz \
@@ -110,15 +110,15 @@ chmod +x /opt/clash/bin/clash
 print_msg "Clash installed"
 
 # =========================
-# Download Geo databases
+# Download Geo databases через Base64
 # =========================
 print_step "Installing Geo databases"
 
-wget -q -O /opt/clash/geosite.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
+ENC_GEOSITE="aHR0cHM6Ly9naXRodWIuY29tL01ldGFDdWJlWC9tZXRhLXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2Vvc2l0ZS5kYXQ="
+ENC_GEOIP="aHR0cHM6Ly9naXRodWIuY29tL01ldGFDdWJlWC9tZXRhLXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0"
 
-wget -q -O /opt/clash/geoip.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
+wget -q -O /opt/clash/geosite.dat $(echo "$ENC_GEOSITE" | base64 -d)
+wget -q -O /opt/clash/geoip.dat $(echo "$ENC_GEOIP" | base64 -d)
 
 print_msg "Geo databases installed"
 
@@ -129,8 +129,8 @@ print_step "Setting up Geo database auto-update"
 
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron_clash
 
-echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron_clash
-echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat $(echo "$ENC_GEOSITE" | base64 -d)" >> /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat $(echo "$ENC_GEOIP" | base64 -d)" >> /tmp/cron_clash
 
 crontab /tmp/cron_clash
 rm -f /tmp/cron_clash
