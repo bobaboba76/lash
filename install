@@ -43,7 +43,7 @@ opkg update || print_error "Failed to update package list"
 if [ "$MODE" = "1" ]; then
     print_step "Installing ZRAM"
 
-    opkg install kmod-zram zram-swap kmod-lib-zstd \
+    opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
     || print_error "Failed to install zram packages"
 
     # Fixed 128 MB
