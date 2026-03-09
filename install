@@ -26,23 +26,54 @@ opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 print_step "Installing luci-app-clash"
 print_msg "Downloading luci-app-clash..."
 wget -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk || print_error "Failed to download luci-app-clash.ipk"
+
 print_msg "Installing luci-app-clash..."
 opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
+
 rm -f /tmp/luci-app-clash.ipk
 print_msg "luci-app-clash installed"
 
-# Install Clash (at the very end)
+# Install Clash
 print_step "Installing Clash"
+
 print_msg "Stopping Clash before installation..."
 /etc/init.d/clash stop 2>/dev/null || print_msg "Clash was not running"
+
 print_msg "Creating directory /opt/clash/bin..."
 mkdir -p /opt/clash/bin || print_error "Failed to create directory /opt/clash/bin"
+
 print_msg "Downloading Clash..."
 wget -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz || print_error "Failed to download clash.gz"
+
 print_msg "Extracting Clash..."
 gunzip /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
+
 chmod +x /opt/clash/bin/clash
 print_msg "Clash installed in /opt/clash/bin"
+
+# Download Geo databases
+print_step "Installing Geo databases"
+
+print_msg "Downloading geosite.dat..."
+wget -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat || print_error "Failed to download geosite.dat"
+
+print_msg "Downloading geoip.dat..."
+wget -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat || print_error "Failed to download geoip.dat"
+
+print_msg "Geo databases installed"
+
+# Setup cron auto-update
+print_step "Setting up Geo database auto-update"
+
+crontab -l 2>/dev/null | grep -v "meta-rules-dat" > /tmp/cron_clash
+
+echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron_clash
+
+crontab /tmp/cron_clash
+rm -f /tmp/cron_clash
+
+print_msg "Cron job installed (monthly update at 04:00)"
 
 # Reboot
 print_step "Rebooting device"
