@@ -19,7 +19,9 @@ print_step "Select installation mode"
 echo "1) Low RAM device (enable ZRAM swap)"
 echo "2) High RAM device (no ZRAM)"
 echo ""
-read -p "Enter option (1 or 2): " MODE
+
+printf "Enter option (1 or 2): "
+read MODE < /dev/tty
 
 # Update packages
 print_step "Updating package list"
