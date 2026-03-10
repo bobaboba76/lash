@@ -5,9 +5,8 @@ print_error() { echo "[!] Error: $1"; exit 1; }
 print_step() { echo "=== $1 ==="; }
 
 # =========================
-# Select installation mode
+# Installation mode selection
 # =========================
-
 print_step "Select installation mode"
 echo "1) Low RAM device (enable ZRAM swap)"
 echo "2) High RAM device (no ZRAM)"
@@ -18,31 +17,25 @@ if [ -e /dev/tty ]; then
     printf "Enter option (1 or 2) [default:2]: "
     read MODE < /dev/tty
 fi
-
 [ -z "$MODE" ] && MODE=2
 print_msg "Selected mode: $MODE"
 
 # =========================
-# Update packages
+# Update package list
 # =========================
-
 print_step "Updating package list"
 opkg update || print_error "Failed to update package list"
 
 # =========================
-# LOW RAM MODE
+# Low RAM mode: ZRAM + tuning
 # =========================
-
 if [ "$MODE" = "1" ]; then
 
 print_step "Installing ZRAM packages"
+opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
+|| print_error "Failed to install ZRAM packages"
 
-opkg install kmod-zram zram-swap kmod-lib-zstd \
-|| print_error "Failed to install zram packages"
-
-print_msg "Setting ZRAM size to 128MB"
-
-ZRAM_SIZE=131072
+ZRAM_SIZE=131072  # 128MB fixed
 
 /etc/init.d/zram stop 2>/dev/null
 
@@ -55,77 +48,56 @@ uci set system.@system[0].vm_vfs_cache_pressure='200'
 
 uci commit system
 
-sysctl -w vm.swappiness=180 >/dev/null
-sysctl -w vm.min_free_kbytes=16384 >/dev/null
-sysctl -w vm.vfs_cache_pressure=200 >/dev/null
-
 /etc/init.d/zram enable
 /etc/init.d/zram start
 
 print_msg "ZRAM enabled (128MB, zstd)"
+print_msg "Low RAM mode completed"
 
 else
-
-print_msg "High RAM mode (ZRAM skipped)"
-
+print_msg "High RAM mode selected (ZRAM skipped)"
 fi
 
 # =========================
 # TPROXY
 # =========================
-
 print_step "Installing kmod-nft-tproxy"
-
-opkg install kmod-nft-tproxy \
-|| print_error "Failed to install kmod-nft-tproxy"
+opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
 # =========================
-# LUCI APP
+# LuCI app
 # =========================
-
 print_step "Installing luci-app-clash"
-
 wget -q -O /tmp/luci-app-clash.ipk \
 https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
 || print_error "Failed to download luci-app-clash"
 
-opkg install /tmp/luci-app-clash.ipk \
-|| print_error "Failed to install luci-app-clash"
-
+opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 rm -f /tmp/luci-app-clash.ipk
-
 print_msg "luci-app-clash installed"
 
-# stop auto-start
-
+# Stop Clash if running
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
 
 # =========================
-# CLASH CORE
+# Clash Core
 # =========================
-
-print_step "Installing Clash"
-
+print_step "Installing Clash core"
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 wget -q -O /opt/clash/bin/clash.gz \
 https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
 || print_error "Failed to download clash"
 
-gunzip -f /opt/clash/bin/clash.gz \
-|| print_error "Failed to extract clash"
-
+gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash"
 chmod +x /opt/clash/bin/clash
-
 print_msg "Clash installed"
 
 # =========================
-# GEO DATABASES
+# Geo databases
 # =========================
-
 print_step "Installing Geo databases"
-
 cd /opt/clash || exit
 
 wget -q -O geosite.dat \
@@ -137,11 +109,9 @@ https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 print_msg "Geo databases installed"
 
 # =========================
-# CRON UPDATE
+# Cron update
 # =========================
-
 print_step "Setting cron update"
-
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
 
 echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
@@ -149,64 +119,43 @@ echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/met
 
 crontab /tmp/cron
 rm -f /tmp/cron
-
 /etc/init.d/cron enable
 /etc/init.d/cron restart
-
 print_msg "Cron installed"
 
 # =========================
-# HOSTNAME + NTP
+# Hostname & NTP
 # =========================
-
-print_step "Setting hostname and NTP servers"
-
 uci set system.@system[0].hostname='miwifi'
-
-uci add_list system.ntp.server='162.159.200.123'
-uci add_list system.ntp.server='162.159.200.1'
-uci add_list system.ntp.server='17.253.84.125'
-uci add_list system.ntp.server='17.253.116.125'
-uci add_list system.ntp.server='213.180.204.183'
-
+uci set system.ntp.server='0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org 162.159.200.123 162.159.200.1 17.253.84.125 17.253.116.125 213.180.204.183'
 uci commit system
-
-/etc/init.d/sysntpd restart
-
-print_msg "Hostname set to miwifi"
+/etc/init.d/system reload
 
 # =========================
-# Disable IPv6 (real)
+# Final sysctl tuning & IPv6 disable
 # =========================
+print_step "Applying final kernel tuning and disabling IPv6"
 
-print_step "Disabling IPv6 and removing wan6"
-
-uci set dhcp.lan.dhcpv6='disabled'
-uci set dhcp.lan.ra='disabled'
-uci set dhcp.lan.ndp='disabled'
-
-uci set network.lan.ip6assign='0'
-
-uci delete network.wan6 2>/dev/null
-uci delete network.globals.ula_prefix 2>/dev/null
-
-uci commit
-
+sysctl -w vm.swappiness=180 >/dev/null
+sysctl -w vm.min_free_kbytes=16384 >/dev/null
+sysctl -w vm.vfs_cache_pressure=200 >/dev/null
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
 sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
 
+uci set sysctl.@system[0].net.ipv6.conf.all.disable_ipv6='1'
+uci set sysctl.@system[0].net.ipv6.conf.default.disable_ipv6='1'
+uci commit sysctl
+
+# Remove WAN6
+uci delete network.wan6 2>/dev/null
+uci commit network
+/etc/init.d/network restart
 /etc/init.d/odhcpd stop
 /etc/init.d/odhcpd disable
 
-/etc/init.d/network restart
-
-print_msg "IPv6 disabled"
-
 # =========================
-# REBOOT
+# Reboot
 # =========================
-
 print_step "Rebooting device"
-
 sleep 2
 reboot
