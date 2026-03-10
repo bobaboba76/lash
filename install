@@ -15,6 +15,7 @@ if [ -e /dev/tty ]; then
     read MODE < /dev/tty
 fi
 [ -z "$MODE" ] && MODE=2
+
 print_msg "Selected mode: $MODE"
 
 print_step "Updating package list"
@@ -24,11 +25,9 @@ if [ "$MODE" = "1" ]; then
 
 print_step "Installing ZRAM"
 
-opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
-|| print_error "Failed to install ZRAM packages"
+opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install zram packages"
 
 ZRAM_SIZE=$((128 * 1024))
-
 print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
@@ -46,18 +45,15 @@ print_msg "High RAM mode (ZRAM skipped)"
 fi
 
 print_step "Installing kmod-nft-tproxy"
-
 opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
 print_step "Installing luci-app-clash"
 
-ENC_LUCI="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTc2L2xhc2gvbWFpbi9sdWNpLWFwcC1jbGFzaC5pcGs="
-
-wget -q -O /tmp/luci-app-clash.ipk $(echo "$ENC_LUCI" | base64 -d) \
+wget -O /tmp/luci-app-clash.ipk \
+https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
 || print_error "Failed to download luci-app-clash"
 
-opkg install /tmp/luci-app-clash.ipk \
-|| print_error "Failed to install luci-app-clash"
+opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 
 rm -f /tmp/luci-app-clash.ipk
 
@@ -72,13 +68,11 @@ print_step "Installing Clash"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
-ENC_CLASH="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTc2L2xhc2gvbWFpbi9jbGFzaC5nei"
-
-wget -q -O /opt/clash/bin/clash.gz $(echo "$ENC_CLASH" | base64 -d) \
+wget -O /opt/clash/bin/clash.gz \
+https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
 || print_error "Failed to download clash.gz"
 
-gunzip -f /opt/clash/bin/clash.gz \
-|| print_error "Failed to extract clash.gz"
+gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
 
 chmod +x /opt/clash/bin/clash
 
@@ -86,11 +80,13 @@ print_msg "Clash installed"
 
 print_step "Installing Geo databases"
 
-ENC_GEOSITE="aHR0cHM6Ly9naXRodWIuY29tL01ldGFDdWJlWC9tZXRhLXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2Vvc2l0ZS5kYXQ="
-ENC_GEOIP="aHR0cHM6Ly9naXRodWIuY29tL01ldGFDdWJlWC9tZXRhLXJ1bGVzLWRhdC9yZWxlYXNlcy9sYXRlc3QvZG93bmxvYWQvZ2VvaXAuZGF0"
+cd /opt/clash || print_error "Directory /opt/clash not found"
 
-wget -q -O /opt/clash/geosite.dat $(echo "$ENC_GEOSITE" | base64 -d)
-wget -q -O /opt/clash/geoip.dat $(echo "$ENC_GEOIP" | base64 -d)
+wget -O geosite.dat \
+https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
+
+wget -O geoip.dat \
+https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 
 print_msg "Geo databases installed"
 
@@ -98,8 +94,8 @@ print_step "Setting up Geo database auto-update"
 
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron_clash
 
-echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat \$(echo \"$ENC_GEOSITE\" | base64 -d)" >> /tmp/cron_clash
-echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat \$(echo \"$ENC_GEOIP\" | base64 -d)" >> /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron_clash
 
 crontab /tmp/cron_clash
 rm -f /tmp/cron_clash
