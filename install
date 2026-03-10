@@ -40,10 +40,15 @@ ZRAM_SIZE=131072
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
 uci set system.@system[0].zram_comp_algo='zstd'
+uci set system.@system[0].vm_swappiness='180'
 uci commit system
+
+sysctl -w vm.swappiness=180
 
 /etc/init.d/zram enable
 /etc/init.d/zram start
+
+print_msg "ZRAM enabled (128MB, zstd)"
 
 print_msg "ZRAM enabled (128MB)"
 
