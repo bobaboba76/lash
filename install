@@ -4,6 +4,10 @@ print_msg() { echo "[*] $1"; }
 print_error() { echo "[!] Error: $1"; exit 1; }
 print_step() { echo "=== $1 ==="; }
 
+# =========================
+# Select installation mode
+# =========================
+
 print_step "Select installation mode"
 echo "1) Low RAM device (enable ZRAM swap)"
 echo "2) High RAM device (no ZRAM)"
@@ -17,6 +21,10 @@ fi
 
 [ -z "$MODE" ] && MODE=2
 print_msg "Selected mode: $MODE"
+
+# =========================
+# Update packages
+# =========================
 
 print_step "Updating package list"
 opkg update || print_error "Failed to update package list"
@@ -67,7 +75,9 @@ fi
 # =========================
 
 print_step "Installing kmod-nft-tproxy"
-opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
+
+opkg install kmod-nft-tproxy \
+|| print_error "Failed to install kmod-nft-tproxy"
 
 # =========================
 # LUCI APP
@@ -86,7 +96,7 @@ rm -f /tmp/luci-app-clash.ipk
 
 print_msg "luci-app-clash installed"
 
-# остановить clash который запускается автоматически
+# stop auto started clash
 
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
@@ -146,9 +156,68 @@ rm -f /tmp/cron
 print_msg "Cron installed"
 
 # =========================
+# HOSTNAME + NTP
+# =========================
+
+print_step "Setting hostname and NTP servers"
+
+uci set system.@system[0].hostname='miwifi'
+
+uci del_list system.ntp.server='time.cloudflare.com' 2>/dev/null
+uci del_list system.ntp.server='pool.ntp.org' 2>/dev/null
+
+uci add_list system.ntp.server='162.159.200.123'
+uci add_list system.ntp.server='162.159.200.1'
+
+uci add_list system.ntp.server='17.253.84.125'
+uci add_list system.ntp.server='17.253.116.125'
+
+uci add_list system.ntp.server='213.180.204.183'
+
+uci set system.ntp.enabled='1'
+uci set system.ntp.enable_server='0'
+
+uci commit system
+
+/etc/init.d/sysntpd restart
+
+print_msg "Hostname set to miwifi"
+
+# =========================
+# Disable IPv6
+# =========================
+
+print_step "Disabling IPv6 and removing wan6"
+
+uci set dhcp.lan.dhcpv6='disabled'
+uci set dhcp.lan.ra='disabled'
+uci set dhcp.lan.ndp='disabled'
+uci set dhcp.wan.dhcpv6='disabled'
+uci set dhcp.wan.ra='disabled'
+uci set dhcp.wan.ndp='disabled'
+
+uci set network.lan.ip6assign='0'
+uci delete network.lan.ip6hint 2>/dev/null
+uci delete network.globals.ula_prefix 2>/dev/null
+
+uci set sysctl.@system[0].net.ipv6.conf.all.disable_ipv6='1'
+uci set sysctl.@system[0].net.ipv6.conf.default.disable_ipv6='1'
+
+uci delete network.wan6 2>/dev/null
+
+uci commit
+
+/etc/init.d/network restart
+/etc/init.d/odhcpd stop
+/etc/init.d/odhcpd disable
+
+print_msg "IPv6 disabled, wan6 removed"
+
+# =========================
 # REBOOT
 # =========================
 
 print_step "Rebooting device"
+
 sleep 2
 reboot
