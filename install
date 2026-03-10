@@ -40,10 +40,16 @@ ZRAM_SIZE=131072
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
 uci set system.@system[0].zram_comp_algo='zstd'
+
 uci set system.@system[0].vm_swappiness='180'
+uci set system.@system[0].vm_min_free_kbytes='16384'
+uci set system.@system[0].vm_vfs_cache_pressure='200'
+
 uci commit system
 
 sysctl -w vm.swappiness=180
+sysctl -w vm.min_free_kbytes=16384
+sysctl -w vm.vfs_cache_pressure=200
 
 /etc/init.d/zram enable
 /etc/init.d/zram start
