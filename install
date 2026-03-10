@@ -39,6 +39,7 @@ ZRAM_SIZE=131072
 /etc/init.d/zram stop 2>/dev/null
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
+uci set system.@system[0].zram_comp_algo='zstd'
 uci commit system
 
 /etc/init.d/zram enable
