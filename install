@@ -5,6 +5,11 @@ print_error() { echo "[!] Error: $1"; exit 1; }
 print_step() { echo "=== $1 ==="; }
 
 # =========================
+# Ensure read works properly
+# =========================
+exec < /dev/tty
+
+# =========================
 # Installation mode selection
 # =========================
 print_step "Select installation mode"
@@ -13,10 +18,8 @@ echo "2) High RAM device (no ZRAM)"
 echo ""
 
 MODE=""
-if [ -e /dev/tty ]; then
-    printf "Enter option (1 or 2) [default:2]: "
-    read MODE < /dev/tty
-fi
+printf "Enter option (1 or 2) [default:2]: "
+read MODE < /dev/tty
 [ -z "$MODE" ] && MODE=2
 print_msg "Selected mode: $MODE"
 
@@ -31,31 +34,31 @@ opkg update || print_error "Failed to update package list"
 # =========================
 if [ "$MODE" = "1" ]; then
 
-print_step "Installing ZRAM packages"
-opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
-|| print_error "Failed to install ZRAM packages"
+    print_step "Installing ZRAM packages"
+    opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
+    || print_error "Failed to install ZRAM packages"
 
-ZRAM_SIZE=131072  # 128MB fixed
+    ZRAM_SIZE=131072  # 128MB fixed
 
-/etc/init.d/zram stop 2>/dev/null
+    /etc/init.d/zram stop 2>/dev/null
 
-uci set system.@system[0].zram_size="$ZRAM_SIZE"
-uci set system.@system[0].zram_comp_algo='zstd'
+    uci set system.@system[0].zram_size="$ZRAM_SIZE"
+    uci set system.@system[0].zram_comp_algo='zstd'
 
-uci set system.@system[0].vm_swappiness='180'
-uci set system.@system[0].vm_min_free_kbytes='16384'
-uci set system.@system[0].vm_vfs_cache_pressure='200'
+    uci set system.@system[0].vm_swappiness='180'
+    uci set system.@system[0].vm_min_free_kbytes='16384'
+    uci set system.@system[0].vm_vfs_cache_pressure='200'
 
-uci commit system
+    uci commit system
 
-/etc/init.d/zram enable
-/etc/init.d/zram start
+    /etc/init.d/zram enable
+    /etc/init.d/zram start
 
-print_msg "ZRAM enabled (128MB, zstd)"
-print_msg "Low RAM mode completed"
+    print_msg "ZRAM enabled (128MB, zstd)"
+    print_msg "Low RAM mode completed"
 
 else
-print_msg "High RAM mode selected (ZRAM skipped)"
+    print_msg "High RAM mode selected (ZRAM skipped)"
 fi
 
 # =========================
@@ -83,7 +86,6 @@ print_msg "luci-app-clash installed"
 # =========================
 # CLASH CORE
 # =========================
-
 print_step "Installing Clash core"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
@@ -143,7 +145,6 @@ uci commit system
 # =========================
 # FINAL KERNEL TUNING & DISABLE IPV6
 # =========================
-
 print_step "Applying final kernel tuning and disabling IPv6 quietly"
 
 sysctl -w vm.swappiness=180 >/dev/null
