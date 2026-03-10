@@ -81,18 +81,27 @@ print_msg "luci-app-clash installed"
 /etc/init.d/clash disable 2>/dev/null
 
 # =========================
-# Clash Core
+# CLASH CORE
 # =========================
+
 print_step "Installing Clash core"
+
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 wget -q -O /opt/clash/bin/clash.gz \
 https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
 || print_error "Failed to download clash"
 
-gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash"
+gunzip -f /opt/clash/bin/clash.gz \
+|| print_error "Failed to extract clash"
+
 chmod +x /opt/clash/bin/clash
-print_msg "Clash installed"
+
+# enable and start clash service
+/etc/init.d/clash enable
+/etc/init.d/clash start
+
+print_msg "Clash installed and enabled"
 
 # =========================
 # Geo databases
