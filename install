@@ -13,8 +13,10 @@ echo "2) High RAM device (no ZRAM)"
 echo ""
 
 MODE=""
-printf "Enter option (1 or 2) [default:2]: "
-read MODE < /dev/tty
+if [ -e /dev/tty ]; then
+    printf "Enter option (1 or 2) [default:2]: "
+    read MODE < /dev/tty
+fi
 [ -z "$MODE" ] && MODE=2
 print_msg "Selected mode: $MODE"
 
@@ -31,7 +33,7 @@ if [ "$MODE" = "1" ]; then
 
     print_step "Installing ZRAM packages"
     opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
-    || print_error "Failed to install ZRAM packages"
+        || print_error "Failed to install ZRAM packages"
 
     ZRAM_SIZE=131072  # 128MB fixed
 
