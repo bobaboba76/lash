@@ -7,7 +7,6 @@ print_step() { echo "=== $1 ==="; }
 # =========================
 # Ensure read works properly
 # =========================
-exec < /dev/tty
 
 # =========================
 # Installation mode selection
