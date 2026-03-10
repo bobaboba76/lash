@@ -14,21 +14,29 @@ if [ -e /dev/tty ]; then
     printf "Enter option (1 or 2) [default:2]: "
     read MODE < /dev/tty
 fi
-[ -z "$MODE" ] && MODE=2
 
+[ -z "$MODE" ] && MODE=2
 print_msg "Selected mode: $MODE"
 
 print_step "Updating package list"
 opkg update || print_error "Failed to update package list"
 
+# =========================
+# LOW RAM MODE
+# =========================
+
 if [ "$MODE" = "1" ]; then
 
-print_step "Installing ZRAM"
+print_step "Installing ZRAM packages"
 
-opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install zram packages"
+opkg install kmod-zram zram-swap kmod-lib-zstd \
+|| print_error "Failed to install zram packages"
 
-ZRAM_SIZE=$((128 * 1024))
-print_msg "Setting ZRAM size to: $ZRAM_SIZE KB (128 MB fixed)"
+print_msg "Setting ZRAM size to 128MB"
+
+ZRAM_SIZE=131072
+
+/etc/init.d/zram stop 2>/dev/null
 
 uci set system.@system[0].zram_size="$ZRAM_SIZE"
 uci commit system
@@ -36,7 +44,7 @@ uci commit system
 /etc/init.d/zram enable
 /etc/init.d/zram start
 
-print_msg "ZRAM enabled"
+print_msg "ZRAM enabled (128MB)"
 
 else
 
@@ -44,68 +52,93 @@ print_msg "High RAM mode (ZRAM skipped)"
 
 fi
 
+# =========================
+# TPROXY
+# =========================
+
 print_step "Installing kmod-nft-tproxy"
 opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
+# =========================
+# LUCI APP
+# =========================
+
 print_step "Installing luci-app-clash"
 
-wget -O /tmp/luci-app-clash.ipk \
+wget -q -O /tmp/luci-app-clash.ipk \
 https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
 || print_error "Failed to download luci-app-clash"
 
-opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
+opkg install /tmp/luci-app-clash.ipk \
+|| print_error "Failed to install luci-app-clash"
 
 rm -f /tmp/luci-app-clash.ipk
 
 print_msg "luci-app-clash installed"
 
-print_msg "Stopping auto-started Clash..."
+# остановить clash который запускается автоматически
 
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
+
+# =========================
+# CLASH CORE
+# =========================
 
 print_step "Installing Clash"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
-wget -O /opt/clash/bin/clash.gz \
+wget -q -O /opt/clash/bin/clash.gz \
 https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
-|| print_error "Failed to download clash.gz"
+|| print_error "Failed to download clash"
 
-gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash.gz"
+gunzip -f /opt/clash/bin/clash.gz \
+|| print_error "Failed to extract clash"
 
 chmod +x /opt/clash/bin/clash
 
 print_msg "Clash installed"
 
+# =========================
+# GEO DATABASES
+# =========================
+
 print_step "Installing Geo databases"
 
-cd /opt/clash || print_error "Directory /opt/clash not found"
+cd /opt/clash || exit
 
-wget -O geosite.dat \
+wget -q -O geosite.dat \
 https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
 
-wget -O geoip.dat \
+wget -q -O geoip.dat \
 https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 
 print_msg "Geo databases installed"
 
-print_step "Setting up Geo database auto-update"
+# =========================
+# CRON UPDATE
+# =========================
 
-crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron_clash
+print_step "Setting cron update"
 
-echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron_clash
-echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron_clash
+crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
 
-crontab /tmp/cron_clash
-rm -f /tmp/cron_clash
+echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
+echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron
+
+crontab /tmp/cron
+rm -f /tmp/cron
 
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 
-print_msg "Cron job installed"
+print_msg "Cron installed"
+
+# =========================
+# REBOOT
+# =========================
 
 print_step "Rebooting device"
-
 sleep 2
 reboot
