@@ -56,8 +56,6 @@ sysctl -w vm.vfs_cache_pressure=200
 
 print_msg "ZRAM enabled (128MB, zstd)"
 
-print_msg "ZRAM enabled (128MB)"
-
 else
 
 print_msg "High RAM mode (ZRAM skipped)"
