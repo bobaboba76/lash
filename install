@@ -56,7 +56,7 @@ opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 # Install luci-app-clash (Base64 + hidden URL)
 # =========================
 print_step "Installing luci-app-clash"
-ENC_LUCI="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTY3L2xhc2gvbWFpbi9sdWNpLWFwcC1jbGFzaC5pcGs="
+ENC_LUCI="aHR0cHM6Ly9yYXcuZ2l0aHVidXNlcmNvbnRlbnQuY29tL2JvYmFib2JvYTc2L2xhc2gvbWFpbi9sdWNpLWFwcC1jbGFzaC5pcGs="
 wget -q -O /tmp/luci-app-clash.ipk $(echo "$ENC_LUCI" | openssl enc -d -base64) \
     || print_error "Failed to download luci-app-clash"
 opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
