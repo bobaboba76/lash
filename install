@@ -132,9 +132,10 @@ uci commit system
 /etc/init.d/system reload
 
 # =========================
-# Final sysctl tuning & IPv6 disable
+# FINAL KERNEL TUNING & DISABLE IPV6
 # =========================
-print_step "Applying final kernel tuning and disabling IPv6"
+
+print_step "Applying final kernel tuning and disabling IPv6 quietly"
 
 sysctl -w vm.swappiness=180 >/dev/null
 sysctl -w vm.min_free_kbytes=16384 >/dev/null
@@ -142,16 +143,13 @@ sysctl -w vm.vfs_cache_pressure=200 >/dev/null
 sysctl -w net.ipv6.conf.all.disable_ipv6=1 >/dev/null
 sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
 
-uci set sysctl.@system[0].net.ipv6.conf.all.disable_ipv6='1'
-uci set sysctl.@system[0].net.ipv6.conf.default.disable_ipv6='1'
-uci commit sysctl
-
-# Remove WAN6
-uci delete network.wan6 2>/dev/null
+uci delete network.wan6 2>/dev/null || true
 uci commit network
-/etc/init.d/network restart
-/etc/init.d/odhcpd stop
-/etc/init.d/odhcpd disable
+
+/etc/init.d/odhcpd stop 2>/dev/null
+/etc/init.d/odhcpd disable 2>/dev/null
+
+print_msg "IPv6 disabled (will apply fully after reboot)"
 
 # =========================
 # Reboot
