@@ -30,10 +30,11 @@ opkg update || print_error "Failed to update package list"
 # Low RAM mode: ZRAM + tuning
 # =========================
 if [ "$MODE" = "1" ]; then
+
     print_step "Installing ZRAM packages"
     opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install ZRAM packages"
 
-    ZRAM_SIZE=131072  # 128MB
+    ZRAM_SIZE=131072  # 128MB fixed
 
     /etc/init.d/zram stop 2>/dev/null
 
@@ -51,6 +52,7 @@ if [ "$MODE" = "1" ]; then
 
     print_msg "ZRAM enabled (128MB, zstd)"
     print_msg "Low RAM mode completed"
+
 else
     print_msg "High RAM mode selected (ZRAM skipped)"
 fi
@@ -65,7 +67,7 @@ opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 # Geo databases
 # =========================
 print_step "Installing Geo databases"
-mkdir -p /opt/clash/bin || print_error "Failed to create directory"
+mkdir -p /opt/clash || exit
 cd /opt/clash || exit
 
 wget -q -O geosite.dat \
@@ -88,41 +90,22 @@ opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-
 rm -f /tmp/luci-app-clash.ipk
 print_msg "luci-app-clash installed"
 
-# =========================
-# Stop Clash if running + fallback DNS
-# =========================
-print_step "Stopping Clash and applying fallback DNS"
-
-# Stop & disable clash
+# Stop Clash if running
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
-
-# Fallback DNS (used when Clash is stopped)
-/usr/bin/uci set dhcp.@dnsmasq[0].noresolv='1'
-/usr/bin/uci del_list dhcp.@dnsmasq[0].server='77.88.8.8' 2>/dev/null
-/usr/bin/uci del_list dhcp.@dnsmasq[0].server='83.220.169.155' 2>/dev/null
-/usr/bin/uci del_list dhcp.@dnsmasq[0].server='9.9.9.9' 2>/dev/null
-/usr/bin/uci add_list dhcp.@dnsmasq[0].server='77.88.8.8'
-/usr/bin/uci add_list dhcp.@dnsmasq[0].server='83.220.169.155'
-/usr/bin/uci add_list dhcp.@dnsmasq[0].server='9.9.9.9'
-/usr/bin/uci commit dhcp
-
-# Reload dnsmasq without Wi-Fi interruption
-/etc/init.d/dnsmasq reload 2>/dev/null
-
-print_msg "Clash stopped, fallback DNS applied"
 
 # =========================
 # CLASH CORE
 # =========================
 print_step "Installing Clash core"
 
+mkdir -p /opt/clash/bin || print_error "Failed to create directory"
+
 wget -q -O /opt/clash/bin/clash.gz \
 https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
 || print_error "Failed to download clash"
 
-gunzip -f /opt/clash/bin/clash.gz \
-|| print_error "Failed to extract clash"
+gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash"
 
 chmod +x /opt/clash/bin/clash
 
@@ -148,14 +131,27 @@ rm -f /tmp/cron
 print_msg "Cron installed"
 
 # =========================
-# Hostname & NTP
+# Hostname, NTP & DNS
 # =========================
-print_step "Configuring hostname and NTP"
+print_step "Configuring hostname, NTP and fallback DNS"
 
 uci set system.@system[0].hostname='miwifi'
 uci set system.ntp.server='0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org 162.159.200.123 162.159.200.1 17.253.84.125 17.253.116.125 213.180.204.183'
+
+# DNS fallback (used when Clash is stopped)
+uci set dhcp.@dnsmasq[0].noresolv='1'
+uci del_list dhcp.@dnsmasq[0].server='77.88.8.8' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='83.220.169.155' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='9.9.9.9' 2>/dev/null
+
+uci add_list dhcp.@dnsmasq[0].server='77.88.8.8'
+uci add_list dhcp.@dnsmasq[0].server='83.220.169.155'
+uci add_list dhcp.@dnsmasq[0].server='9.9.9.9'
+
 uci commit system
-/etc/init.d/system reload
+uci commit dhcp
+
+print_msg "Hostname, NTP and DNS configured"
 
 # =========================
 # FINAL KERNEL TUNING & DISABLE IPV6
