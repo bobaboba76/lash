@@ -68,6 +68,8 @@ opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 # Geo databases
 # =========================
 print_step "Installing Geo databases"
+
+mkdir -p /opt/clash || print_error "Failed to create /opt/clash directory"
 cd /opt/clash || exit
 
 wget -q -O geosite.dat \
