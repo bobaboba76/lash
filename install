@@ -32,7 +32,7 @@ opkg update || print_error "Failed to update package list"
 if [ "$MODE" = "1" ]; then
 
     print_step "Installing ZRAM packages"
-    opkg install kmod-zram zram-swap kmod-lib-zstd coreutils-base64 openssl-util \
+    opkg install kmod-zram zram-swap kmod-lib-zstd \
         || print_error "Failed to install ZRAM packages"
 
     ZRAM_SIZE=131072  # 128MB fixed
@@ -132,12 +132,29 @@ rm -f /tmp/cron
 print_msg "Cron installed"
 
 # =========================
-# Hostname & NTP
+# Hostname, NTP & DNS
 # =========================
+
+print_step "Configuring hostname, NTP and DNS"
+
 uci set system.@system[0].hostname='miwifi'
+
 uci set system.ntp.server='0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org 162.159.200.123 162.159.200.1 17.253.84.125 17.253.116.125 213.180.204.183'
+
+# DNS fallback (used when Clash is stopped)
+uci set dhcp.@dnsmasq[0].noresolv='1'
+uci del_list dhcp.@dnsmasq[0].server='77.88.8.8' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='83.220.169.155' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='9.9.9.9' 2>/dev/null
+
+uci add_list dhcp.@dnsmasq[0].server='77.88.8.8'
+uci add_list dhcp.@dnsmasq[0].server='83.220.169.155'
+uci add_list dhcp.@dnsmasq[0].server='9.9.9.9'
+
 uci commit system
-/etc/init.d/system reload
+uci commit dhcp
+
+print_msg "Hostname, NTP and DNS configured"
 
 # =========================
 # FINAL KERNEL TUNING & DISABLE IPV6
