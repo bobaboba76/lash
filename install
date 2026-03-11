@@ -30,22 +30,17 @@ opkg update || print_error "Failed to update package list"
 # Low RAM mode: ZRAM + tuning
 # =========================
 if [ "$MODE" = "1" ]; then
-
     print_step "Installing ZRAM packages"
-    opkg install kmod-zram zram-swap kmod-lib-zstd \
-        || print_error "Failed to install ZRAM packages"
+    opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install ZRAM packages"
 
     ZRAM_SIZE=131072  # 128MB fixed
-
     /etc/init.d/zram stop 2>/dev/null
 
     uci set system.@system[0].zram_size="$ZRAM_SIZE"
     uci set system.@system[0].zram_comp_algo='zstd'
-
     uci set system.@system[0].vm_swappiness='180'
     uci set system.@system[0].vm_min_free_kbytes='16384'
     uci set system.@system[0].vm_vfs_cache_pressure='200'
-
     uci commit system
 
     /etc/init.d/zram enable
@@ -53,7 +48,6 @@ if [ "$MODE" = "1" ]; then
 
     print_msg "ZRAM enabled (128MB, zstd)"
     print_msg "Low RAM mode completed"
-
 else
     print_msg "High RAM mode selected (ZRAM skipped)"
 fi
@@ -68,15 +62,11 @@ opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 # Geo databases
 # =========================
 print_step "Installing Geo databases"
-
 mkdir -p /opt/clash || print_error "Failed to create /opt/clash directory"
 cd /opt/clash || exit
 
-wget -q -O geosite.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
-
-wget -q -O geoip.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
+wget -q -O geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
+wget -q -O geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 
 print_msg "Geo databases installed"
 
@@ -84,9 +74,8 @@ print_msg "Geo databases installed"
 # LuCI app
 # =========================
 print_step "Installing luci-app-clash"
-wget -q -O /tmp/luci-app-clash.ipk \
-https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
-|| print_error "Failed to download luci-app-clash"
+wget -q -O /tmp/luci-app-clash.ipk https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
+    || print_error "Failed to download luci-app-clash"
 
 opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 rm -f /tmp/luci-app-clash.ipk
@@ -100,22 +89,15 @@ print_msg "luci-app-clash installed"
 # CLASH CORE
 # =========================
 print_step "Installing Clash core"
+wget -q -O /opt/clash/bin/clash.gz https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
+    || print_error "Failed to download clash"
 
-mkdir -p /opt/clash/bin || print_error "Failed to create directory"
-
-wget -q -O /opt/clash/bin/clash.gz \
-https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
-|| print_error "Failed to download clash"
-
-gunzip -f /opt/clash/bin/clash.gz \
-|| print_error "Failed to extract clash"
-
+gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash"
 chmod +x /opt/clash/bin/clash
 
-# enable and start clash service
+# Enable and start clash service
 /etc/init.d/clash enable
 /etc/init.d/clash start
-
 print_msg "Clash installed and enabled"
 
 # =========================
@@ -123,10 +105,8 @@ print_msg "Clash installed and enabled"
 # =========================
 print_step "Setting cron update"
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
-
 echo "0 4 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
 echo "0 4 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron
-
 crontab /tmp/cron
 rm -f /tmp/cron
 /etc/init.d/cron enable
@@ -134,35 +114,29 @@ rm -f /tmp/cron
 print_msg "Cron installed"
 
 # =========================
-# Hostname, NTP & DNS
+# Hostname, NTP & fallback DNS
 # =========================
-
-print_step "Configuring hostname, NTP and DNS"
-
+print_step "Configuring hostname, NTP and fallback DNS"
 uci set system.@system[0].hostname='miwifi'
-
 uci set system.ntp.server='0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 2.openwrt.pool.ntp.org 3.openwrt.pool.ntp.org 162.159.200.123 162.159.200.1 17.253.84.125 17.253.116.125 213.180.204.183'
 
-# DNS fallback (used when Clash is stopped)
+# Fallback DNS (used when Clash is stopped)
 uci set dhcp.@dnsmasq[0].noresolv='1'
 uci del_list dhcp.@dnsmasq[0].server='77.88.8.8' 2>/dev/null
 uci del_list dhcp.@dnsmasq[0].server='83.220.169.155' 2>/dev/null
 uci del_list dhcp.@dnsmasq[0].server='9.9.9.9' 2>/dev/null
-
 uci add_list dhcp.@dnsmasq[0].server='77.88.8.8'
 uci add_list dhcp.@dnsmasq[0].server='83.220.169.155'
 uci add_list dhcp.@dnsmasq[0].server='9.9.9.9'
 
 uci commit system
 uci commit dhcp
-
-print_msg "Hostname, NTP and DNS configured"
+print_msg "Hostname, NTP and fallback DNS configured"
 
 # =========================
 # FINAL KERNEL TUNING & DISABLE IPV6
 # =========================
 print_step "Applying final kernel tuning and disabling IPv6 quietly"
-
 sysctl -w vm.swappiness=180 >/dev/null
 sysctl -w vm.min_free_kbytes=16384 >/dev/null
 sysctl -w vm.vfs_cache_pressure=200 >/dev/null
@@ -174,7 +148,6 @@ uci commit network
 
 /etc/init.d/odhcpd stop 2>/dev/null
 /etc/init.d/odhcpd disable 2>/dev/null
-
 print_msg "IPv6 disabled (will apply fully after reboot)"
 
 # =========================
