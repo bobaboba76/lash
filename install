@@ -179,6 +179,29 @@ uci commit network
 print_msg "IPv6 disabled (will apply fully after reboot)"
 
 # =========================
+# WIFI STABILITY TUNING
+# =========================
+print_step "Applying WiFi stability tuning"
+
+uci set wireless.@wifi-iface[0].wpa_group_rekey='86400'
+uci set wireless.@wifi-iface[1].wpa_group_rekey='86400'
+
+uci set wireless.@wifi-iface[0].disassoc_low_ack='0'
+uci set wireless.@wifi-iface[1].disassoc_low_ack='0'
+
+uci set wireless.@wifi-iface[0].dtim_period='2'
+uci set wireless.@wifi-iface[1].dtim_period='2'
+
+uci set wireless.radio0.beacon_int='100'
+uci set wireless.radio1.beacon_int='100'
+
+uci set wireless.@wifi-iface[0].multicast_to_unicast='1'
+uci set wireless.@wifi-iface[1].multicast_to_unicast='1'
+
+uci commit wireless
+
+print_msg "WiFi tuning applied"
+# =========================
 # Reboot
 # =========================
 print_step "Rebooting device"
