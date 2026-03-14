@@ -8,19 +8,20 @@ print_step() { echo "=== $1 ==="; }
 # Installation mode selection
 # =========================
 print_step "Select installation mode"
+
 echo "1) Low RAM device (enable ZRAM swap)"
 echo "2) High RAM device (no ZRAM)"
 echo ""
 
 MODE=""
 
-if [ -e /dev/tty ]; then
-    exec < /dev/tty
-    printf "Enter option (1 or 2) [default:2]: "
-    read MODE
+if [ -c /dev/tty ]; then
+    printf "Enter option (1 or 2) [default:2]: " > /dev/tty
+    read MODE < /dev/tty
 fi
 
 [ -z "$MODE" ] && MODE=2
+
 print_msg "Selected mode: $MODE"
 
 # =========================
