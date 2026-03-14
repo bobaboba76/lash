@@ -201,6 +201,15 @@ uci set wireless.@wifi-iface[1].multicast_to_unicast='1'
 uci commit wireless
 
 print_msg "WiFi tuning applied"
+
+# =========================
+# ENABLE WIFI APs
+# =========================
+print_step "Enabling Wi-Fi access points"
+
+wifi up
+
+print_msg "Wi-Fi APs enabled"
 # =========================
 # Reboot
 # =========================
