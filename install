@@ -15,12 +15,20 @@ echo ""
 
 MODE=""
 
-if [ -c /dev/tty ]; then
-    printf "Enter option (1 or 2) [default:2]: " > /dev/tty
-    read MODE < /dev/tty
+printf "Enter option (1 or 2) [default:2]: "
+
+if [ -t 0 ]; then
+    read -r MODE
+else
+    read -r MODE < /dev/tty 2>/dev/null
 fi
 
 [ -z "$MODE" ] && MODE=2
+
+case "$MODE" in
+1|2) ;;
+*) MODE=2 ;;
+esac
 
 print_msg "Selected mode: $MODE"
 
