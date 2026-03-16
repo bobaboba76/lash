@@ -213,16 +213,16 @@ uci commit wireless
 print_msg "WiFi tuning applied"
 
 # =========================
-# ENABLE WIFI APs (safe)
+# ENABLE WIFI APs (universal)
 # =========================
 print_step "Enabling Wi-Fi access points"
 
-# trigger Wi-Fi only if /etc/init.d/wifi exists
-if [ -e /etc/init.d/wifi ]; then
-    /sbin/wifi up 2>/dev/null || true
-    print_msg "Wi-Fi APs triggered (will fully apply after reboot)"
+if [ -x /etc/init.d/wifi ]; then
+    /etc/init.d/wifi enable
+    /etc/init.d/wifi start
+    print_msg "Wi-Fi APs enabled via init script"
 else
-    print_msg "Wi-Fi init script not found, skipping"
+    wifi up 2>/dev/null && print_msg "Wi-Fi APs enabled via 'wifi up'" || print_msg "Wi-Fi could not be enabled"
 fi
 
 # =========================
