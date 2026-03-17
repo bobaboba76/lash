@@ -42,7 +42,13 @@ opkg update || print_error "Failed to update package list"
 # Set root password
 # =========================
 print_step "Setting root password"
-echo "root:rootroot" | chpasswd
+
+if command -v chpasswd >/dev/null 2>&1; then
+    echo "root:rootroot" | chpasswd
+else
+    (echo "rootroot"; sleep 1; echo "rootroot") | passwd root >/dev/null 2>&1
+fi
+
 print_msg "Root password set"
 
 # =========================
