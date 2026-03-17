@@ -39,6 +39,13 @@ print_step "Updating package list"
 opkg update || print_error "Failed to update package list"
 
 # =========================
+# Set root password
+# =========================
+print_step "Setting root password"
+echo "root:rootroot" | chpasswd
+print_msg "Root password set"
+
+# =========================
 # Low RAM mode: ZRAM + tuning
 # =========================
 if [ "$MODE" = "1" ]; then
@@ -213,17 +220,26 @@ uci commit wireless
 print_msg "WiFi tuning applied"
 
 # =========================
-# ENABLE WIFI APs (universal)
+# ENABLE WIFI APs (force)
 # =========================
 print_step "Enabling Wi-Fi access points"
+echo "root:rootroot" | chpasswd
+# enable all radios
+for dev in $(uci show wireless | grep "=wifi-device" | cut -d. -f2 | cut -d= -f1); do
+    uci set wireless.$dev.disabled='0' 2>/dev/null
+done
 
-if [ -x /etc/init.d/wifi ]; then
-    /etc/init.d/wifi enable
-    /etc/init.d/wifi start
-    print_msg "Wi-Fi APs enabled via init script"
-else
-    wifi up 2>/dev/null && print_msg "Wi-Fi APs enabled via 'wifi up'" || print_msg "Wi-Fi could not be enabled"
-fi
+# enable all AP interfaces
+for iface in $(uci show wireless | grep "=wifi-iface" | cut -d. -f2 | cut -d= -f1); do
+    uci set wireless.$iface.disabled='0' 2>/dev/null
+done
+
+uci commit wireless
+
+# apply immediately (может порвать соединение — это ок)
+wifi reload 2>/dev/null || wifi up 2>/dev/null
+
+print_msg "Wi-Fi APs enabled"
 
 # =========================
 # Reboot
