@@ -202,10 +202,27 @@ uci commit network
 print_msg "IPv6 disabled (will apply fully after reboot)"
 
 # =========================
-# WIFI STABILITY TUNING
+# WIFI STABILITY + CONFIG
 # =========================
 print_step "Applying WiFi stability tuning"
 
+# Country (Panama for max power/flexibility)
+uci set wireless.radio0.country='PA'
+uci set wireless.radio1.country='PA'
+
+# SSID
+uci set wireless.@wifi-iface[0].ssid='Miwifi'
+uci set wireless.@wifi-iface[1].ssid='Miwifi'
+
+# Encryption (WPA2 for compatibility)
+uci set wireless.@wifi-iface[0].encryption='psk2'
+uci set wireless.@wifi-iface[1].encryption='psk2'
+
+# Password
+uci set wireless.@wifi-iface[0].key='rootrootroot'
+uci set wireless.@wifi-iface[1].key='rootrootroot'
+
+# Stability tuning
 uci set wireless.@wifi-iface[0].wpa_group_rekey='86400'
 uci set wireless.@wifi-iface[1].wpa_group_rekey='86400'
 
@@ -223,7 +240,7 @@ uci set wireless.@wifi-iface[1].multicast_to_unicast='1'
 
 uci commit wireless
 
-print_msg "WiFi tuning applied"
+print_msg "WiFi configured: Miwifi / WPA2"
 
 # =========================
 # ENABLE WIFI APs (force)
