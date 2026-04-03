@@ -148,7 +148,6 @@ crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
 
 echo "0 2 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
 echo "0 2 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron
-echo "*/15 * * * * pidof clash >/dev/null || /etc/init.d/clash start" >> /tmp/cron
 echo "0 3 2 * * sleep 70 && /sbin/reboot" >> /tmp/cron
 
 crontab /tmp/cron
