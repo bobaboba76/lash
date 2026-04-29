@@ -126,15 +126,45 @@ print_step "Installing Clash core"
 
 mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
-wget -q -O /opt/clash/bin/clash.gz \
-https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz \
-|| print_error "Failed to download clash"
+CLASH_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz"
 
-gunzip -f /opt/clash/bin/clash.gz || print_error "Failed to extract clash"
+# Узнаём ожидаемый размер файла до скачивания
+EXPECTED_SIZE=$(wget --spider -S "$CLASH_URL" 2>&1 | grep "Content-Length" | awk '{print $2}' | tr -d '\r')
+[ -z "$EXPECTED_SIZE" ] && print_error "Failed to get file size from server"
+print_msg "Expected file size: ${EXPECTED_SIZE} bytes"
+
+# Скачиваем
+wget -q -O /opt/clash/bin/clash.gz "$CLASH_URL" \
+  || print_error "Failed to download clash"
+
+# Проверяем что скачался полностью
+ACTUAL_SIZE=$(wc -c < /opt/clash/bin/clash.gz)
+[ "$ACTUAL_SIZE" -ne "$EXPECTED_SIZE" ] \
+  && print_error "Download incomplete! Expected ${EXPECTED_SIZE}, got ${ACTUAL_SIZE} bytes"
+
+# Проверяем целостность gz архива
+gzip -t /opt/clash/bin/clash.gz \
+  || print_error "clash.gz corrupt (gzip check failed)"
+
+# Распаковываем
+gunzip -f /opt/clash/bin/clash.gz \
+  || print_error "Failed to extract clash"
+
+# Проверяем что бинарник не обрезан
+CLASH_SIZE=$(wc -c < /opt/clash/bin/clash)
+[ "$CLASH_SIZE" -lt 10000000 ] \
+  && print_error "clash too small (${CLASH_SIZE} bytes), possibly corrupt"
+
+# Проверяем что это ELF бинарник
+ELF_MAGIC=$(dd if=/opt/clash/bin/clash bs=4 count=1 2>/dev/null | hexdump -e '4/1 "%02x"')
+[ "$ELF_MAGIC" != "7f454c46" ] \
+  && print_error "clash is not a valid ELF binary"
+
+print_msg "Clash binary OK (${CLASH_SIZE} bytes)"
 
 chmod +x /opt/clash/bin/clash
 
-# enable and start clash service
+# Запускаем сервис
 /etc/init.d/clash enable
 /etc/init.d/clash start
 
