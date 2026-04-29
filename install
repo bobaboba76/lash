@@ -128,19 +128,9 @@ mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 CLASH_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz"
 
-# Узнаём ожидаемый размер файла до скачивания
-EXPECTED_SIZE=$(wget --spider -S "$CLASH_URL" 2>&1 | grep "Content-Length" | awk '{print $2}' | tr -d '\r')
-[ -z "$EXPECTED_SIZE" ] && print_error "Failed to get file size from server"
-print_msg "Expected file size: ${EXPECTED_SIZE} bytes"
-
 # Скачиваем
 wget -q -O /opt/clash/bin/clash.gz "$CLASH_URL" \
   || print_error "Failed to download clash"
-
-# Проверяем что скачался полностью
-ACTUAL_SIZE=$(wc -c < /opt/clash/bin/clash.gz)
-[ "$ACTUAL_SIZE" -ne "$EXPECTED_SIZE" ] \
-  && print_error "Download incomplete! Expected ${EXPECTED_SIZE}, got ${ACTUAL_SIZE} bytes"
 
 # Проверяем целостность gz архива
 gzip -t /opt/clash/bin/clash.gz \
@@ -150,7 +140,7 @@ gzip -t /opt/clash/bin/clash.gz \
 gunzip -f /opt/clash/bin/clash.gz \
   || print_error "Failed to extract clash"
 
-# Проверяем что бинарник не обрезан
+# Проверяем размер бинарника после распаковки
 CLASH_SIZE=$(wc -c < /opt/clash/bin/clash)
 [ "$CLASH_SIZE" -lt 11000000 ] \
   && print_error "clash too small (${CLASH_SIZE} bytes), possibly corrupt"
