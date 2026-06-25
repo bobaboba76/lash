@@ -194,54 +194,6 @@ uci commit dhcp
 print_msg "Hostname, NTP and DNS configured"
 
 # =========================
-# Kernel tuning & IPv6
-# =========================
-print_step "Applying kernel tuning and IPv6 configuration"
-
-# VM параметры — применяем runtime сразу, независимо от режима (Low/High RAM).
-# В Low RAM режиме они уже выставлены через UCI выше; здесь дублируем для High RAM
-# и для немедленного эффекта (UCI применяется только после перезагрузки).
-sysctl -w vm.swappiness=180          >/dev/null
-sysctl -w vm.min_free_kbytes=16384   >/dev/null
-sysctl -w vm.vfs_cache_pressure=200  >/dev/null
-
-# Отключаем IPv6 на уровне ядра — runtime (сразу)
-sysctl -w net.ipv6.conf.all.disable_ipv6=1     >/dev/null
-sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
-
-# Персистим отключение IPv6 через /etc/sysctl.conf (выживает после reboot)
-grep -q "disable_ipv6" /etc/sysctl.conf 2>/dev/null || {
-    echo "net.ipv6.conf.all.disable_ipv6=1"     >> /etc/sysctl.conf
-    echo "net.ipv6.conf.default.disable_ipv6=1" >> /etc/sysctl.conf
-    print_msg "IPv6 disable persisted to /etc/sysctl.conf"
-}
-
-# Удаляем wan6 только если он реально существует в UCI.
-# ВНИМАНИЕ: у некоторых провайдеров (dual-stack, PPPoE через IPv6)
-# wan6 — это единственный WAN-интерфейс. Удаление = потеря интернета.
-# Если не уверен — закомментируй этот блок и перепроверь у провайдера.
-# if uci get network.wan6 >/dev/null 2>&1; then
-#     uci delete network.wan6
-#     uci commit network
-#     print_msg "wan6 removed from UCI config (takes full effect after reboot)"
-# else
-#     print_msg "wan6 not present in UCI config — skipping"
-# fi
-
-# Отключаем раздачу IPv6 клиентам в LAN через odhcpd.
-# Это касается только локальной сети — WAN-подключение не затрагивается.
-uci set dhcp.odhcpd.maindhcp='0'   2>/dev/null || true
-uci set dhcp.lan.dhcpv6='disabled' 2>/dev/null || true
-uci set dhcp.lan.ra='disabled'     2>/dev/null || true
-uci commit dhcp                    2>/dev/null || true
-
-/etc/init.d/odhcpd stop    2>/dev/null
-/etc/init.d/odhcpd disable 2>/dev/null
-
-print_msg "Kernel VM tuning applied"
-print_msg "IPv6 disabled: kernel (runtime + persistent) and LAN (odhcpd)"
-
-# =========================
 # WiFi stability + config
 # =========================
 print_step "Applying WiFi stability tuning"
