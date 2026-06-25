@@ -1,8 +1,8 @@
 #!/bin/sh
 
-print_msg()   { echo "[*] $1"; }
+print_msg() { echo "[*] $1"; }
 print_error() { echo "[!] Error: $1"; exit 1; }
-print_step()  { echo "=== $1 ==="; }
+print_step() { echo "=== $1 ==="; }
 
 # =========================
 # Installation mode selection
@@ -26,8 +26,8 @@ fi
 [ -z "$MODE" ] && MODE=2
 
 case "$MODE" in
-    1|2) ;;
-    *)   MODE=2 ;;
+1|2) ;;
+*) MODE=2 ;;
 esac
 
 print_msg "Selected mode: $MODE"
@@ -57,8 +57,7 @@ print_msg "Root password set"
 if [ "$MODE" = "1" ]; then
 
     print_step "Installing ZRAM packages"
-    opkg install kmod-zram zram-swap kmod-lib-zstd \
-        || print_error "Failed to install ZRAM packages"
+    opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install ZRAM packages"
 
     ZRAM_SIZE=131072  # 128MB fixed
 
@@ -66,9 +65,11 @@ if [ "$MODE" = "1" ]; then
 
     uci set system.@system[0].zram_size="$ZRAM_SIZE"
     uci set system.@system[0].zram_comp_algo='zstd'
+
     uci set system.@system[0].vm_swappiness='180'
     uci set system.@system[0].vm_min_free_kbytes='16384'
     uci set system.@system[0].vm_vfs_cache_pressure='200'
+
     uci commit system
 
     /etc/init.d/zram enable
@@ -95,10 +96,10 @@ mkdir -p /opt/clash || exit
 cd /opt/clash || exit
 
 wget -q -O geosite.dat \
-    https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
+https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
 
 wget -q -O geoip.dat \
-    https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
+https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 
 print_msg "Geo databases installed"
 
@@ -107,19 +108,19 @@ print_msg "Geo databases installed"
 # =========================
 print_step "Installing luci-app-clash"
 wget -q -O /tmp/luci-app-clash.ipk \
-    https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
-    || print_error "Failed to download luci-app-clash"
+https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
+|| print_error "Failed to download luci-app-clash"
 
 opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
 rm -f /tmp/luci-app-clash.ipk
 print_msg "luci-app-clash installed"
 
 # Stop Clash if running
-/etc/init.d/clash stop    2>/dev/null
+/etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
 
 # =========================
-# Clash core
+# CLASH CORE
 # =========================
 print_step "Installing Clash core"
 
@@ -127,27 +128,33 @@ mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 CLASH_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz"
 
+# Скачиваем
 wget -q -O /opt/clash/bin/clash.gz "$CLASH_URL" \
-    || print_error "Failed to download clash"
+  || print_error "Failed to download clash"
 
+# Проверяем целостность gz архива
 gzip -t /opt/clash/bin/clash.gz \
-    || print_error "clash.gz corrupt (gzip check failed)"
+  || print_error "clash.gz corrupt (gzip check failed)"
 
+# Распаковываем
 gunzip -f /opt/clash/bin/clash.gz \
-    || print_error "Failed to extract clash"
+  || print_error "Failed to extract clash"
 
+# Проверяем размер бинарника после распаковки
 CLASH_SIZE=$(wc -c < /opt/clash/bin/clash)
 [ "$CLASH_SIZE" -lt 11000000 ] \
-    && print_error "clash too small (${CLASH_SIZE} bytes), possibly corrupt"
+  && print_error "clash too small (${CLASH_SIZE} bytes), possibly corrupt"
 
+# Проверяем что это ELF бинарник
 ELF_MAGIC=$(dd if=/opt/clash/bin/clash bs=4 count=1 2>/dev/null | hexdump -e '4/1 "%02x"')
 [ "$ELF_MAGIC" != "7f454c46" ] \
-    && print_error "clash is not a valid ELF binary"
+  && print_error "clash is not a valid ELF binary"
 
 print_msg "Clash binary OK (${CLASH_SIZE} bytes)"
 
 chmod +x /opt/clash/bin/clash
 
+# Запускаем сервис
 /etc/init.d/clash enable
 /etc/init.d/clash start
 
@@ -160,8 +167,8 @@ print_step "Setting cron update"
 crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
 
 echo "0 2 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
-echo "0 2 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat"     >> /tmp/cron
-echo "0 3 2 * * sleep 70 && /sbin/reboot"                                                                                            >> /tmp/cron
+echo "0 2 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron
+echo "0 3 2 * * sleep 70 && /sbin/reboot" >> /tmp/cron
 
 crontab /tmp/cron
 rm -f /tmp/cron
@@ -181,9 +188,10 @@ uci set system.ntp.server='0.openwrt.pool.ntp.org 1.openwrt.pool.ntp.org 162.159
 
 # DNS fallback (used when Clash is stopped)
 uci set dhcp.@dnsmasq[0].noresolv='1'
-uci del_list dhcp.@dnsmasq[0].server='77.88.8.8'        2>/dev/null
-uci del_list dhcp.@dnsmasq[0].server='83.220.169.155'   2>/dev/null
-uci del_list dhcp.@dnsmasq[0].server='9.9.9.9'          2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='77.88.8.8' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='83.220.169.155' 2>/dev/null
+uci del_list dhcp.@dnsmasq[0].server='9.9.9.9' 2>/dev/null
+
 uci add_list dhcp.@dnsmasq[0].server='77.88.8.8'
 uci add_list dhcp.@dnsmasq[0].server='83.220.169.155'
 uci add_list dhcp.@dnsmasq[0].server='9.9.9.9'
@@ -194,39 +202,86 @@ uci commit dhcp
 print_msg "Hostname, NTP and DNS configured"
 
 # =========================
-# WiFi stability + config
+# KERNEL TUNING & IPv6
+# =========================
+print_step "Applying kernel tuning and IPv6 configuration"
+
+# --- Kernel VM tuning (runtime, effective immediately) ---
+# Note: for Low RAM mode these are also set via UCI above;
+# here we apply them unconditionally at runtime regardless of mode.
+sysctl -w vm.swappiness=180          >/dev/null
+sysctl -w vm.min_free_kbytes=16384   >/dev/null
+sysctl -w vm.vfs_cache_pressure=200  >/dev/null
+
+# --- IPv6: disable at kernel level (runtime) ---
+sysctl -w net.ipv6.conf.all.disable_ipv6=1     >/dev/null
+sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
+
+# --- IPv6: persist across reboots via /etc/sysctl.conf ---
+grep -q "disable_ipv6" /etc/sysctl.conf 2>/dev/null || {
+    echo "net.ipv6.conf.all.disable_ipv6=1"     >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.disable_ipv6=1" >> /etc/sysctl.conf
+}
+
+# --- wan6: remove only if the interface actually exists ---
+# IMPORTANT: some providers (e.g. dual-stack ISPs) use wan6 for WAN connectivity.
+# Deleting it on such a provider will drop internet access entirely.
+# The check below only removes wan6 if it is present in UCI config.
+if uci get network.wan6 >/dev/null 2>&1; then
+    uci delete network.wan6
+    uci commit network
+    print_msg "wan6 interface removed from UCI config"
+else
+    print_msg "wan6 not found in UCI config — skipping"
+fi
+
+# --- odhcpd: disable DHCPv6/RA for LAN clients only ---
+# This does NOT affect WAN connectivity — odhcpd serves the local network.
+uci set dhcp.odhcpd.maindhcp='0'   2>/dev/null || true
+uci set dhcp.lan.dhcpv6='disabled' 2>/dev/null || true
+uci set dhcp.lan.ra='disabled'     2>/dev/null || true
+uci commit dhcp                    2>/dev/null || true
+
+/etc/init.d/odhcpd stop    2>/dev/null
+/etc/init.d/odhcpd disable 2>/dev/null
+
+print_msg "IPv6 disabled at kernel level and for LAN clients"
+print_msg "Note: wan6 removal takes full effect after reboot"
+
+# =========================
+# WIFI STABILITY + CONFIG
 # =========================
 print_step "Applying WiFi stability tuning"
 
-# Страна PA (Панама) — снимает ограничения на мощность и каналы
+# Country (Panama for max power/flexibility)
 uci set wireless.radio0.country='PA'
 uci set wireless.radio1.country='PA'
 
+# SSID
 uci set wireless.@wifi-iface[0].ssid='Miwifi'
 uci set wireless.@wifi-iface[1].ssid='Miwifi'
 
-# WPA2 — максимальная совместимость
+# Encryption (WPA2 for compatibility)
 uci set wireless.@wifi-iface[0].encryption='psk2'
 uci set wireless.@wifi-iface[1].encryption='psk2'
 
+# Password
 uci set wireless.@wifi-iface[0].key='rootrootroot'
 uci set wireless.@wifi-iface[1].key='rootrootroot'
 
-# Стабильность: редкая смена группового ключа, не кикать клиентов по слабому сигналу
+# Stability tuning
 uci set wireless.@wifi-iface[0].wpa_group_rekey='86400'
 uci set wireless.@wifi-iface[1].wpa_group_rekey='86400'
 
 uci set wireless.@wifi-iface[0].disassoc_low_ack='0'
 uci set wireless.@wifi-iface[1].disassoc_low_ack='0'
 
-# DTIM 2 — баланс между энергопотреблением клиентов и задержкой
 uci set wireless.@wifi-iface[0].dtim_period='2'
 uci set wireless.@wifi-iface[1].dtim_period='2'
 
 uci set wireless.radio0.beacon_int='100'
 uci set wireless.radio1.beacon_int='100'
 
-# Multicast → unicast: снижает broadcast-шум в сети
 uci set wireless.@wifi-iface[0].multicast_to_unicast='1'
 uci set wireless.@wifi-iface[1].multicast_to_unicast='1'
 
@@ -235,23 +290,22 @@ uci commit wireless
 print_msg "WiFi configured: Miwifi / WPA2"
 
 # =========================
-# Enable WiFi APs (force)
+# ENABLE WIFI APs (force)
 # =========================
 print_step "Enabling Wi-Fi access points"
-
-# Включаем все радио
+# enable all radios
 for dev in $(uci show wireless | grep "=wifi-device" | cut -d. -f2 | cut -d= -f1); do
-    uci set wireless."$dev".disabled='0' 2>/dev/null
+    uci set wireless.$dev.disabled='0' 2>/dev/null
 done
 
-# Включаем все AP-интерфейсы
+# enable all AP interfaces
 for iface in $(uci show wireless | grep "=wifi-iface" | cut -d. -f2 | cut -d= -f1); do
-    uci set wireless."$iface".disabled='0' 2>/dev/null
+    uci set wireless.$iface.disabled='0' 2>/dev/null
 done
 
 uci commit wireless
 
-# Применяем немедленно (может временно прервать SSH-соединение — это нормально)
+# apply immediately (может порвать соединение — это ок)
 wifi reload 2>/dev/null || wifi up 2>/dev/null
 
 print_msg "Wi-Fi APs enabled"
