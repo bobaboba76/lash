@@ -202,53 +202,6 @@ uci commit dhcp
 print_msg "Hostname, NTP and DNS configured"
 
 # =========================
-# KERNEL TUNING & IPv6
-# =========================
-print_step "Applying kernel tuning and IPv6 configuration"
-
-# --- Kernel VM tuning (runtime, effective immediately) ---
-# Note: for Low RAM mode these are also set via UCI above;
-# here we apply them unconditionally at runtime regardless of mode.
-sysctl -w vm.swappiness=180          >/dev/null
-sysctl -w vm.min_free_kbytes=16384   >/dev/null
-sysctl -w vm.vfs_cache_pressure=200  >/dev/null
-
-# --- IPv6: disable at kernel level (runtime) ---
-sysctl -w net.ipv6.conf.all.disable_ipv6=1     >/dev/null
-sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
-
-# --- IPv6: persist across reboots via /etc/sysctl.conf ---
-grep -q "disable_ipv6" /etc/sysctl.conf 2>/dev/null || {
-    echo "net.ipv6.conf.all.disable_ipv6=1"     >> /etc/sysctl.conf
-    echo "net.ipv6.conf.default.disable_ipv6=1" >> /etc/sysctl.conf
-}
-
-# --- wan6: remove only if the interface actually exists ---
-# IMPORTANT: some providers (e.g. dual-stack ISPs) use wan6 for WAN connectivity.
-# Deleting it on such a provider will drop internet access entirely.
-# The check below only removes wan6 if it is present in UCI config.
-if uci get network.wan6 >/dev/null 2>&1; then
-    uci delete network.wan6
-    uci commit network
-    print_msg "wan6 interface removed from UCI config"
-else
-    print_msg "wan6 not found in UCI config — skipping"
-fi
-
-# --- odhcpd: disable DHCPv6/RA for LAN clients only ---
-# This does NOT affect WAN connectivity — odhcpd serves the local network.
-uci set dhcp.odhcpd.maindhcp='0'   2>/dev/null || true
-uci set dhcp.lan.dhcpv6='disabled' 2>/dev/null || true
-uci set dhcp.lan.ra='disabled'     2>/dev/null || true
-uci commit dhcp                    2>/dev/null || true
-
-/etc/init.d/odhcpd stop    2>/dev/null
-/etc/init.d/odhcpd disable 2>/dev/null
-
-print_msg "IPv6 disabled at kernel level and for LAN clients"
-print_msg "Note: wan6 removal takes full effect after reboot"
-
-# =========================
 # WIFI STABILITY + CONFIG
 # =========================
 print_step "Applying WiFi stability tuning"
