@@ -202,6 +202,53 @@ uci commit dhcp
 print_msg "Hostname, NTP and DNS configured"
 
 # =========================
+# KERNEL TUNING & IPv6
+# =========================
+print_step "Applying kernel tuning and IPv6 configuration"
+
+# --- Kernel VM tuning (runtime, effective immediately) ---
+# Note: for Low RAM mode these are also set via UCI above;
+# here we apply them unconditionally at runtime regardless of mode.
+sysctl -w vm.swappiness=180          >/dev/null
+sysctl -w vm.min_free_kbytes=16384   >/dev/null
+sysctl -w vm.vfs_cache_pressure=200  >/dev/null
+
+# --- IPv6: disable at kernel level (runtime) ---
+sysctl -w net.ipv6.conf.all.disable_ipv6=1     >/dev/null
+sysctl -w net.ipv6.conf.default.disable_ipv6=1 >/dev/null
+
+# --- IPv6: persist across reboots via /etc/sysctl.conf ---
+grep -q "disable_ipv6" /etc/sysctl.conf 2>/dev/null || {
+    echo "net.ipv6.conf.all.disable_ipv6=1"     >> /etc/sysctl.conf
+    echo "net.ipv6.conf.default.disable_ipv6=1" >> /etc/sysctl.conf
+}
+
+# --- wan6: remove only if the interface actually exists ---
+# IMPORTANT: some providers (e.g. dual-stack ISPs) use wan6 for WAN connectivity.
+# Deleting it on such a provider will drop internet access entirely.
+# The check below only removes wan6 if it is present in UCI config.
+if uci get network.wan6 >/dev/null 2>&1; then
+    uci delete network.wan6
+    uci commit network
+    print_msg "wan6 interface removed from UCI config"
+else
+    print_msg "wan6 not found in UCI config — skipping"
+fi
+
+# --- odhcpd: disable DHCPv6/RA for LAN clients only ---
+# This does NOT affect WAN connectivity — odhcpd serves the local network.
+uci set dhcp.odhcpd.maindhcp='0'   2>/dev/null || true
+uci set dhcp.lan.dhcpv6='disabled' 2>/dev/null || true
+uci set dhcp.lan.ra='disabled'     2>/dev/null || true
+uci commit dhcp                    2>/dev/null || true
+
+/etc/init.d/odhcpd stop    2>/dev/null
+/etc/init.d/odhcpd disable 2>/dev/null
+
+print_msg "IPv6 disabled at kernel level and for LAN clients"
+print_msg "Note: wan6 removal takes full effect after reboot"
+
+# =========================
 # WIFI STABILITY + CONFIG
 # =========================
 print_step "Applying WiFi stability tuning"
@@ -258,91 +305,10 @@ done
 
 uci commit wireless
 
+# apply immediately (может порвать соединение — это ок)
+wifi reload 2>/dev/null || wifi up 2>/dev/null
+
 print_msg "Wi-Fi APs enabled"
-
-# =========================
-# Miwifi-Direct bypass AP (UCI only, applied after reboot)
-# =========================
-print_step "Configuring Miwifi-Direct bypass AP (deferred)"
-
-IFACE='direct_lan'
-SSID='Miwifi-Direct'
-PASS='rootrootroot'
-GW='192.168.11.1'
-RADIO='radio0'
-BRIDGE='br-direct'
-
-# Network interface
-uci -q delete network.$IFACE
-uci set network.$IFACE=interface
-uci set network.$IFACE.proto='static'
-uci set network.$IFACE.ipaddr="$GW"
-uci set network.$IFACE.netmask='255.255.255.0'
-uci set network.$IFACE.device="$BRIDGE"
-
-uci -q delete network.direct_lan_dev
-uci set network.direct_lan_dev=device
-uci set network.direct_lan_dev.name="$BRIDGE"
-uci set network.direct_lan_dev.type='bridge'
-uci commit network
-
-# DHCP
-uci -q delete dhcp.$IFACE
-uci set dhcp.$IFACE=dhcp
-uci set dhcp.$IFACE.interface="$IFACE"
-uci set dhcp.$IFACE.start='100'
-uci set dhcp.$IFACE.limit='50'
-uci set dhcp.$IFACE.leasetime='12h'
-uci set dhcp.$IFACE.dhcp_option='6,8.8.8.8,1.1.1.1,77.88.8.8'
-uci commit dhcp
-
-# WiFi AP
-uci -q delete wireless.direct_wifi
-uci set wireless.direct_wifi=wifi-iface
-uci set wireless.direct_wifi.device="$RADIO"
-uci set wireless.direct_wifi.mode='ap'
-uci set wireless.direct_wifi.ssid="$SSID"
-uci set wireless.direct_wifi.encryption='psk2'
-uci set wireless.direct_wifi.key="$PASS"
-uci set wireless.direct_wifi.network="$IFACE"
-uci commit wireless
-
-# Firewall zone
-OLD=$(uci show firewall | grep "name='direct_zone'" | cut -d. -f2 | cut -d= -f1)
-[ -n "$OLD" ] && uci delete firewall.$OLD
-
-uci add firewall zone > /dev/null
-ZONE=$(uci show firewall | grep "=zone" | tail -1 | cut -d. -f2 | cut -d= -f1)
-uci set firewall.$ZONE.name='direct_zone'
-uci set firewall.$ZONE.network="$IFACE"
-uci set firewall.$ZONE.input='ACCEPT'
-uci set firewall.$ZONE.output='ACCEPT'
-uci set firewall.$ZONE.forward='ACCEPT'
-uci set firewall.$ZONE.masq='1'
-uci set firewall.$ZONE.mtu_fix='1'
-uci commit firewall
-
-# Forwarding direct_zone → wan
-uci add firewall forwarding > /dev/null
-FWD=$(uci show firewall | grep "=forwarding" | tail -1 | cut -d. -f2 | cut -d= -f1)
-uci set firewall.$FWD.src='direct_zone'
-uci set firewall.$FWD.dest='wan'
-uci commit firewall
-
-# nft.conf patch — at this point Clash isn't running yet,
-# so patch the file if it already exists, otherwise create a marker
-# that post-install can pick up. Usually Clash start above creates it.
-NFT_CONF='/opt/clash/nft.conf'
-if [ -f "$NFT_CONF" ]; then
-    grep -v 'iifname "br-direct" return' "$NFT_CONF" > /tmp/nft_clean.conf
-    mv /tmp/nft_clean.conf "$NFT_CONF"
-    sed -i 's/ip daddr \$RESERVED_IP return/iifname "br-direct" return\n        ip daddr $RESERVED_IP return/' "$NFT_CONF"
-    print_msg "nft.conf patched"
-else
-    print_msg "nft.conf not found yet — will need manual patch after first Clash start"
-fi
-
-print_msg "Miwifi-Direct config written (takes effect after reboot)"
 
 # =========================
 # Reboot
