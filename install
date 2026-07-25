@@ -5,6 +5,51 @@ print_error() { echo "[!] Error: $1"; exit 1; }
 print_step() { echo "=== $1 ==="; }
 
 # =========================
+# Package manager detection (opkg vs apk)
+# OpenWrt <= 24.10 -> opkg
+# OpenWrt 25.12+    -> apk (opkg is gone/deprecated)
+# =========================
+print_step "Detecting package manager"
+
+if command -v apk >/dev/null 2>&1; then
+    PKG_MGR="apk"
+elif command -v opkg >/dev/null 2>&1; then
+    PKG_MGR="opkg"
+else
+    print_error "Neither apk nor opkg found on this system"
+fi
+
+print_msg "Package manager: $PKG_MGR"
+
+# Wrapper: refresh package index
+pkg_update() {
+    if [ "$PKG_MGR" = "apk" ]; then
+        apk update
+    else
+        opkg update
+    fi
+}
+
+# Wrapper: install package(s) from repo
+pkg_install() {
+    if [ "$PKG_MGR" = "apk" ]; then
+        apk add "$@"
+    else
+        opkg install "$@"
+    fi
+}
+
+# Wrapper: install a local package file ($1 = path to .ipk or .apk)
+pkg_install_local() {
+    if [ "$PKG_MGR" = "apk" ]; then
+        # custom/unsigned builds require --allow-untrusted on apk
+        apk add --allow-untrusted "$1"
+    else
+        opkg install "$1"
+    fi
+}
+
+# =========================
 # Installation mode selection
 # =========================
 print_step "Select installation mode"
@@ -36,7 +81,7 @@ print_msg "Selected mode: $MODE"
 # Update package list
 # =========================
 print_step "Updating package list"
-opkg update || print_error "Failed to update package list"
+pkg_update || print_error "Failed to update package list"
 
 # =========================
 # Set root password
@@ -57,7 +102,7 @@ print_msg "Root password set"
 if [ "$MODE" = "1" ]; then
 
     print_step "Installing ZRAM packages"
-    opkg install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install ZRAM packages"
+    pkg_install kmod-zram zram-swap kmod-lib-zstd || print_error "Failed to install ZRAM packages"
 
     ZRAM_SIZE=131072  # 128MB fixed
 
@@ -86,7 +131,7 @@ fi
 # TPROXY
 # =========================
 print_step "Installing kmod-nft-tproxy"
-opkg install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
+pkg_install kmod-nft-tproxy || print_error "Failed to install kmod-nft-tproxy"
 
 # =========================
 # Geo databases
@@ -104,23 +149,31 @@ https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
 print_msg "Geo databases installed"
 
 # =========================
-# LuCI app
+# LuCI app (auto ipk/apk depending on package manager)
 # =========================
 print_step "Installing luci-app-clash"
-wget -q -O /tmp/luci-app-clash.ipk \
-https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk \
-|| print_error "Failed to download luci-app-clash"
 
-opkg install /tmp/luci-app-clash.ipk || print_error "Failed to install luci-app-clash"
-rm -f /tmp/luci-app-clash.ipk
-print_msg "luci-app-clash installed"
+if [ "$PKG_MGR" = "apk" ]; then
+    LUCI_PKG_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.apk"
+    LUCI_PKG_FILE="/tmp/luci-app-clash.apk"
+else
+    LUCI_PKG_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/luci-app-clash.ipk"
+    LUCI_PKG_FILE="/tmp/luci-app-clash.ipk"
+fi
+
+wget -q -O "$LUCI_PKG_FILE" "$LUCI_PKG_URL" \
+    || print_error "Failed to download luci-app-clash ($PKG_MGR build)"
+
+pkg_install_local "$LUCI_PKG_FILE" || print_error "Failed to install luci-app-clash"
+rm -f "$LUCI_PKG_FILE"
+print_msg "luci-app-clash installed ($PKG_MGR)"
 
 # Stop Clash if running
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
 
 # =========================
-# CLASH CORE
+# CLASH CORE (static binary, format-agnostic — unchanged)
 # =========================
 print_step "Installing Clash core"
 
