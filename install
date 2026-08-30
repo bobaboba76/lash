@@ -50,6 +50,88 @@ pkg_install_local() {
 }
 
 # =========================
+# NEW: Mirror failover for package feeds (RU-blocking resilience)
+# Tries a list of known-good OpenWrt mirrors, keeps the first one that
+# actually answers, and rewrites distfeeds.conf by swapping only the
+# hostname — the version/target/arch path segments already present in
+# the device's own default distfeeds.conf are preserved as-is, so this
+# stays correct regardless of which router/arch the script runs on.
+# =========================
+configure_pkg_mirror() {
+    print_step "Selecting reachable package mirror"
+
+    if [ "$PKG_MGR" = "apk" ]; then
+        print_msg "apk (OpenWrt 25.12+) uses /etc/apk/repositories — skipping automatic failover for now, default source left as-is"
+        return
+    fi
+
+    FEEDS_FILE="/etc/opkg/distfeeds.conf"
+    [ -f "$FEEDS_FILE" ] || { print_msg "distfeeds.conf not found, skipping mirror selection"; return; }
+    [ -f "${FEEDS_FILE}.orig" ] || cp "$FEEDS_FILE" "${FEEDS_FILE}.orig"
+
+    ORIG_HOST="downloads.openwrt.org"
+
+    # Candidate mirrors, in preference order.
+    # Format: "host[/subpath]"
+    MIRRORS="
+downloads.openwrt.org
+mirror-03.infra.openwrt.org
+mirror.accum.se/mirror/openwrt.org
+mirrors.tuna.tsinghua.edu.cn/openwrt
+mirrors.ustc.edu.cn/openwrt
+mirror.bjtu.edu.cn/openwrt
+"
+
+    for M in $MIRRORS; do
+        HOST_ONLY=$(echo "$M" | cut -d/ -f1)
+        print_msg "Testing $HOST_ONLY ..."
+        if wget -q --timeout=5 --tries=1 -O /dev/null "https://${HOST_ONLY}/" 2>/dev/null; then
+            print_msg "OK -> using $M"
+            sed -e "s#https://${ORIG_HOST}#https://${M}#g" \
+                -e "s#http://${ORIG_HOST}#https://${M}#g" \
+                "${FEEDS_FILE}.orig" > "$FEEDS_FILE"
+            return
+        fi
+    done
+
+    print_msg "No alternate mirror reachable — keeping default distfeeds.conf"
+}
+
+# =========================
+# NEW: GitHub fetch with proxy fallback (RU-blocking resilience)
+# raw.githubusercontent.com / github.com releases are a separate
+# single point of failure from opkg feeds. If the direct pull fails,
+# retry through a URL-prefix ghproxy-style mirror. These are
+# community-run, best-effort services — not guaranteed uptime, but a
+# reasonable fallback when the direct route is blocked.
+# =========================
+fetch_gh() {
+    # $1 = output path, $2 = source URL (github.com or raw.githubusercontent.com)
+    OUT="$1"
+    URL="$2"
+
+    if wget -q --timeout=10 --tries=2 -O "$OUT" "$URL"; then
+        return 0
+    fi
+
+    print_msg "Direct GitHub fetch failed, trying proxy mirror for: $URL"
+
+    GH_PROXIES="
+https://gh-proxy.com/
+https://ghproxy.com/
+https://cf.ghproxy.cc/
+"
+    for P in $GH_PROXIES; do
+        if wget -q --timeout=10 --tries=2 -O "$OUT" "${P}${URL}"; then
+            print_msg "OK via proxy: $P"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# =========================
 # Installation mode selection
 # =========================
 print_step "Select installation mode"
@@ -80,6 +162,7 @@ print_msg "Selected mode: $MODE"
 # =========================
 # Update package list
 # =========================
+configure_pkg_mirror
 print_step "Updating package list"
 pkg_update || print_error "Failed to update package list"
 
@@ -140,11 +223,13 @@ print_step "Installing Geo databases"
 mkdir -p /opt/clash || exit
 cd /opt/clash || exit
 
-wget -q -O geosite.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat
+fetch_gh geosite.dat \
+    "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" \
+    || print_error "Failed to download geosite.dat (direct + proxy both failed)"
 
-wget -q -O geoip.dat \
-https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat
+fetch_gh geoip.dat \
+    "https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" \
+    || print_error "Failed to download geoip.dat (direct + proxy both failed)"
 
 print_msg "Geo databases installed"
 
@@ -161,8 +246,8 @@ else
     LUCI_PKG_FILE="/tmp/luci-app-clash.ipk"
 fi
 
-wget -q -O "$LUCI_PKG_FILE" "$LUCI_PKG_URL" \
-    || print_error "Failed to download luci-app-clash ($PKG_MGR build)"
+fetch_gh "$LUCI_PKG_FILE" "$LUCI_PKG_URL" \
+    || print_error "Failed to download luci-app-clash ($PKG_MGR build, direct + proxy both failed)"
 
 pkg_install_local "$LUCI_PKG_FILE" || print_error "Failed to install luci-app-clash"
 rm -f "$LUCI_PKG_FILE"
@@ -181,9 +266,9 @@ mkdir -p /opt/clash/bin || print_error "Failed to create directory"
 
 CLASH_URL="https://raw.githubusercontent.com/bobaboba76/lash/main/clash.gz"
 
-# Скачиваем
-wget -q -O /opt/clash/bin/clash.gz "$CLASH_URL" \
-  || print_error "Failed to download clash"
+# Скачиваем (с fallback через gh-proxy при блокировке)
+fetch_gh /opt/clash/bin/clash.gz "$CLASH_URL" \
+  || print_error "Failed to download clash (direct + proxy both failed)"
 
 # Проверяем целостность gz архива
 gzip -t /opt/clash/bin/clash.gz \
@@ -221,7 +306,7 @@ crontab -l 2>/dev/null | grep -v meta-rules-dat > /tmp/cron
 
 echo "0 2 1 * * wget -q -O /opt/clash/geosite.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geosite.dat" >> /tmp/cron
 echo "0 2 1 * * wget -q -O /opt/clash/geoip.dat https://github.com/MetaCubeX/meta-rules-dat/releases/latest/download/geoip.dat" >> /tmp/cron
-echo "0 3 2 * * sleep 70 && /sbin/reboot" >> /tmp/cron
+echo "0 3 1 * * sleep 70 && /sbin/reboot" >> /tmp/cron
 
 crontab /tmp/cron
 rm -f /tmp/cron
