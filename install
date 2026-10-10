@@ -368,13 +368,15 @@ uci set network.direct_lan_dev.type='bridge'
 uci commit network
 
 # DHCP
+# Заглушка: клиенты Direct используют роутер как DNS.
+# Хотплаг 98-direct-dns ниже подставит DNS провайдера при поднятии WAN.
 uci -q delete dhcp.$IFACE
 uci set dhcp.$IFACE=dhcp
 uci set dhcp.$IFACE.interface="$IFACE"
 uci set dhcp.$IFACE.start='100'
 uci set dhcp.$IFACE.limit='50'
 uci set dhcp.$IFACE.leasetime='12h'
-uci set dhcp.$IFACE.dhcp_option='6,8.8.8.8,1.1.1.1,77.88.8.8'
+uci set dhcp.$IFACE.dhcp_option="6,$GW"
 uci commit dhcp
 
 # WiFi AP
@@ -410,19 +412,80 @@ uci set firewall.$FWD.src='direct_zone'
 uci set firewall.$FWD.dest='wan'
 uci commit firewall
 
-# nft.conf patch — at this point Clash isn't running yet,
-# so patch the file if it already exists, otherwise create a marker
-# that post-install can pick up. Usually Clash start above creates it.
-NFT_CONF='/opt/clash/nft.conf'
-if [ -f "$NFT_CONF" ]; then
-    grep -v 'iifname "br-direct" return' "$NFT_CONF" > /tmp/nft_clean.conf
-    mv /tmp/nft_clean.conf "$NFT_CONF"
-    sed -i 's/ip daddr \$RESERVED_IP return/iifname "br-direct" return\n        ip daddr $RESERVED_IP return/' "$NFT_CONF"
-    print_msg "nft.conf patched"
-else
-    print_msg "nft.conf not found yet — will need manual patch after first Clash start"
-fi
+# =========================
+# Direct: DNS провайдера (хотплаг при поднятии WAN)
+# =========================
+print_step "Installing Direct DNS hotplug"
 
+cat > /etc/hotplug.d/iface/98-direct-dns <<'EOF_DNS'
+#!/bin/sh
+[ "$ACTION" = "ifup" ] || exit 0
+. /lib/functions/network.sh
+network_find_wan WAN_IF
+[ -n "$WAN_IF" ] && [ "$INTERFACE" = "$WAN_IF" ] || exit 0
+network_get_dnsserver DNS_LIST "$WAN_IF"
+DNS=""
+for d in $DNS_LIST; do
+    case "$d" in *:*) ;; *) DNS="${DNS:+$DNS,}$d";; esac
+done
+if [ -z "$DNS" ]; then
+    for d in $(awk '/^nameserver/{print $2}' /tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null); do
+        case "$d" in *:*) ;; *) DNS="${DNS:+$DNS,}$d";; esac
+    done
+fi
+[ -z "$DNS" ] && exit 0
+NEW="6,$DNS"
+[ "$(uci -q get dhcp.direct_lan.dhcp_option)" = "$NEW" ] && exit 0
+uci set dhcp.direct_lan.dhcp_option="$NEW"
+uci commit dhcp
+/etc/init.d/dnsmasq reload
+EOF_DNS
+chmod +x /etc/hotplug.d/iface/98-direct-dns
+
+print_msg "Direct DNS hotplug installed"
+
+# =========================
+# Direct: nft-правила Clash (не зависят от имени WAN-устройства)
+#  - iifname "br-direct" return : исходящий трафик клиентов Direct мимо tproxy
+#  - iifname "<WAN dev>" return : ответы из WAN не должны попадать в tproxy
+# Скрипт идемпотентный: запускается после подъёма WAN и раз в минуту по cron
+# (на случай перезапуска clash / пересоздания таблицы)
+# =========================
+print_step "Installing Direct nft rules for Clash"
+
+cat > /usr/bin/clash-wan-return.sh <<'EOF_NFT'
+#!/bin/sh
+. /lib/functions/network.sh
+network_find_wan WAN_IF
+network_get_physdev WAN_DEV "$WAN_IF"
+nft list chain ip clash prerouting >/dev/null 2>&1 || exit 0
+CH=$(nft list chain ip clash prerouting)
+echo "$CH" | grep -q 'iifname "br-direct" return' || \
+    nft insert rule ip clash prerouting iifname "br-direct" return
+if [ -n "$WAN_DEV" ]; then
+    echo "$CH" | grep -q "iifname \"$WAN_DEV\" counter" || \
+        nft insert rule ip clash prerouting iifname "$WAN_DEV" counter return
+fi
+EOF_NFT
+chmod +x /usr/bin/clash-wan-return.sh
+
+cat > /etc/hotplug.d/iface/97-clash-wan-return <<'EOF_HP'
+#!/bin/sh
+[ "$ACTION" = "ifup" ] || exit 0
+( sleep 15; /usr/bin/clash-wan-return.sh ) &
+EOF_HP
+chmod +x /etc/hotplug.d/iface/97-clash-wan-return
+
+crontab -l 2>/dev/null | grep -v clash-wan-return > /tmp/cron
+echo "* * * * * /usr/bin/clash-wan-return.sh" >> /tmp/cron
+crontab /tmp/cron
+rm -f /tmp/cron
+/etc/init.d/cron restart
+
+# Применить сразу, если clash уже поднялся
+/usr/bin/clash-wan-return.sh
+
+print_msg "Direct nft rules installed"
 print_msg "Miwifi-Direct config written (takes effect after reboot)"
 
 # =========================
