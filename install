@@ -171,7 +171,12 @@ print_msg "luci-app-clash installed ($PKG_MGR)"
 # Stop Clash if running
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
-
+# Raise open files limit for Clash
+INITD=/etc/init.d/clash
+if [ -f "$INITD" ] && ! grep -q 'limits nofile' "$INITD"; then
+    sed -i '/procd_open_instance/a\procd_set_param limits nofile="65535 65535"' "$INITD"
+    print_msg "nofile limit set for Clash"
+fi
 # =========================
 # CLASH CORE (static binary, format-agnostic — unchanged)
 # =========================
