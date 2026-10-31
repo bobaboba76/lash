@@ -171,12 +171,21 @@ print_msg "luci-app-clash installed ($PKG_MGR)"
 # Stop Clash if running
 /etc/init.d/clash stop 2>/dev/null
 /etc/init.d/clash disable 2>/dev/null
-# Raise open files limit for Clash
+
+# Raise open files limit for Clash (идемпотентно)
 INITD=/etc/init.d/clash
 if [ -f "$INITD" ] && ! grep -q 'limits nofile' "$INITD"; then
     sed -i '/procd_open_instance/a\procd_set_param limits nofile="65535 65535"' "$INITD"
     print_msg "nofile limit set for Clash"
 fi
+
+# Вызывать clash-wan-return.sh сразу после создания правил Clash (clash-rules start),
+# чтобы return-правила возвращались при каждом старте/рестарте clash
+if [ -f "$INITD" ] && ! grep -q 'clash-wan-return' "$INITD"; then
+    sed -i '/clash-rules start/a\        [ -x /usr/bin/clash-wan-return.sh ] && /usr/bin/clash-wan-return.sh' "$INITD"
+    print_msg "clash-wan-return hook added to init script"
+fi
+
 # =========================
 # CLASH CORE (static binary, format-agnostic — unchanged)
 # =========================
@@ -453,8 +462,9 @@ print_msg "Direct DNS hotplug installed"
 # Direct: nft-правила Clash (не зависят от имени WAN-устройства)
 #  - iifname "br-direct" return : исходящий трафик клиентов Direct мимо tproxy
 #  - iifname "<WAN dev>" return : ответы из WAN не должны попадать в tproxy
-# Скрипт идемпотентный: запускается после подъёма WAN и раз в минуту по cron
-# (на случай перезапуска clash / пересоздания таблицы)
+#    (берём и логическое устройство — ppp/l2tp/pptp, и физическое — eth*)
+# Скрипт идемпотентный: запускается из init-скрипта clash (после clash-rules start)
+# и хотплагом после подъёма WAN
 # =========================
 print_step "Installing Direct nft rules for Clash"
 
@@ -462,15 +472,18 @@ cat > /usr/bin/clash-wan-return.sh <<'EOF_NFT'
 #!/bin/sh
 . /lib/functions/network.sh
 network_find_wan WAN_IF
+[ -n "$WAN_IF" ] || exit 0
+network_get_device  WAN_L3  "$WAN_IF"
 network_get_physdev WAN_DEV "$WAN_IF"
+[ "$WAN_DEV" = "$WAN_L3" ] && WAN_DEV=""
 nft list chain ip clash prerouting >/dev/null 2>&1 || exit 0
 CH=$(nft list chain ip clash prerouting)
 echo "$CH" | grep -q 'iifname "br-direct" return' || \
     nft insert rule ip clash prerouting iifname "br-direct" return
-if [ -n "$WAN_DEV" ]; then
-    echo "$CH" | grep -q "iifname \"$WAN_DEV\" counter" || \
-        nft insert rule ip clash prerouting iifname "$WAN_DEV" counter return
-fi
+for D in $WAN_L3 $WAN_DEV; do
+    echo "$CH" | grep -q "iifname \"$D\" counter" || \
+        nft insert rule ip clash prerouting iifname "$D" counter return
+done
 EOF_NFT
 chmod +x /usr/bin/clash-wan-return.sh
 
@@ -481,8 +494,8 @@ cat > /etc/hotplug.d/iface/97-clash-wan-return <<'EOF_HP'
 EOF_HP
 chmod +x /etc/hotplug.d/iface/97-clash-wan-return
 
+# Убираем cron-задачу из прошлых версий установщика (если была)
 crontab -l 2>/dev/null | grep -v clash-wan-return > /tmp/cron
-echo "* * * * * /usr/bin/clash-wan-return.sh" >> /tmp/cron
 crontab /tmp/cron
 rm -f /tmp/cron
 /etc/init.d/cron restart
